@@ -127,7 +127,7 @@ CS336-Chinese-co-construction/
 ## 🔗 相关链接
 
 - **仓库地址**：https://github.com/xuhu0115/diy-llm
-- **在线阅读地址**：https://datawhalechina.github.io/diy-llm/#/
+- **在线阅读地址**：https://datawhalechina.github.io/diy-llm/
 - **原版课程主页**：[Stanford CS336 (Spring 2025)](https://stanford-cs336.github.io/spring2025/)
 - **原版课程项目**：https://github.com/stanford-cs336/spring2025-lectures/tree/main
 
