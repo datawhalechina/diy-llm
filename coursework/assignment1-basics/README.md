@@ -19,7 +19,7 @@ pip install torch numpy transformers tokenizers tqdm psutil matplotlib
 生成训练数据的二进制文件：
 
 ```bash
-python "get  train data.py"
+python get_train_data.py
 ```
 
 这会生成`data.bin`文件（从训练文本中随机抽取80万个样本）。
@@ -31,7 +31,7 @@ python "get  train data.py"
 使用默认参数训练：
 
 ```bash
-python "train.py"
+python train.py
 ```
 
 自定义参数训练：
@@ -47,7 +47,7 @@ python train.py --epochs 10 --batch_size 16 --d_model 256 --num_heads 8 --num_la
 训练完成后，直接运行model.py进行文本生成：
 
 ```bash
-python "model.py"
+python model.py
 ```
 
 默认会加载`ckpt/epoch_5.pt`权重文件，并根据`prompt`生成文本。
