@@ -1,9 +1,4 @@
-以下是在**保持原有结构不变**的前提下，对全文进行的中文翻译：
-
----
-
 # CS336 2025 年春季 作业 4：数据
-
 有关本次作业的完整说明，请参阅作业讲义：
 [cs336_spring2025_assignment4_data.pdf](./相关文档/cs336_spring2025_assignment4_data.pdf)
 
@@ -34,7 +29,6 @@
 
 与之前的作业相同，我们使用 `uv` 来管理依赖。
 
-## Submitting
+其中作业的全部流程都在`assignment4-data/cs336_data/作业一.ipynb`和 `assignment4-data/cs336_data/作业二.ipynb`，里面有讲解和代码，其中我们供读者跑通基础作业：
 
-提交时，请运行 `./test_and_make_submission.sh`。该脚本将安装你代码所需的依赖、运行测试，并生成一个 gzip 压缩的 tar 包作为输出。我们应当能够解压你提交的 tar 包，并再次运行
-`./test_and_make_submission.sh` 来验证你的测试结果。
+只需运行`cs336_systems/作业1.ipynb`和`cs336_systems/作业2.ipynb`就可以跑通流程，其他文件都是这两个文件生成的，不需要理会。

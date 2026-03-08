@@ -31,35 +31,6 @@
 └── ... TODO(你)：作业2所需的其他文件或文件夹 ...
 ```
 
-其中我们供读者跑通基础作业：
+其中作业的全部流程都在`assignment2-systems/cs336_systems/作业1.ipynb`和 `assignment2-systems/cs336_systems/作业1.ipynb`，里面有讲解和代码，其中我们供读者跑通基础作业：
+
 只需运行`cs336_systems/作业1.ipynb`和`cs336_systems/作业2.ipynb`就可以跑通流程，其他文件都是这两个文件生成的，不需要理会。
-
-
-## 使用uv创建自己的环境
-
-
-
-
-
-我们使用`uv`管理依赖项。您可以通过运行以下命令来验证`cs336-basics`包中的代码是否可访问：
-
-```sh
-$ uv run python
-Using CPython 3.12.10
-Creating virtual environment at: /path/to/uv/env/dir
-      Built cs336-systems @ file:///path/to/systems/dir
-      Built cs336-basics @ file:///path/to/basics/dir
-Installed 85 packages in 711ms
-Python 3.12.10 (main, Apr  9 2025, 04:03:51) [Clang 20.1.0 ] on linux
-...
->>> import cs336_basics
->>> 
-```
-
-`uv run`会根据`pyproject.toml`文件自动安装依赖项。
-
-
-
-## 提交作业
-
-要提交作业，请运行`./test_and_make_submission.sh`。该脚本将安装代码的依赖项、运行测试并创建一个gzip压缩的tar包。我们应该能够解压您提交的tar包并运行`./test_and_make_submission.sh`来验证您的测试结果。
