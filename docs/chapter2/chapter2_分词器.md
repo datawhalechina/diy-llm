@@ -419,7 +419,7 @@ if __name__ == "__main__":
 
 总体来说，以上四种子词分词算法各有特点，没有哪一种是绝对最好的。选择算法时应根据具体的文本内容（语料分布）、任务类型（理解或生成）、词表规模以及是否需要处理多语言来决定，这样才能让训练出来的LLM模型发挥最佳性能。
 
->[T5](https://ai.younglimit.com/deep-learning/nlp-pretraining/encoder-decoder-bart-and-t5/t5)（Text-to-Text Transfer Transformer）是Google在2019年提出的一种基于Transformer的预训练语言模型框架。其核心思想是将所有自然语言处理任务统一表示为“文本到文本”的形式，从而实现多任>务统一建模。在此基础上，Google后续提出了一系列扩展模型，包括：
+>[T5](https://ai.younglimit.com/deep-learning/nlp-pretraining/encoder-decoder-bart-and-t5/t5)（Text-to-Text Transfer Transformer）是Google在2019年提出的一种基于Transformer的预训练语言模型框架。其核心思想是将所有自然语言处理任务统一表示为“文本到文本”的形式，从而实现多任务统一建模。在此基础上，Google后续提出了一系列扩展模型，包括：
 >- mT5：在多语言语料上预训练的T5扩展版本，支持跨语言任务；
 >- UL2：一种统一的预训练范式，通过混合多种去噪目标（类似BERT、T5的目标任务），提升模型在不同下游任务的泛化能力。
 >
