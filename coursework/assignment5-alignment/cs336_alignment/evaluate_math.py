@@ -153,7 +153,7 @@ if __name__ == "__main__":
 
     # Set sampling parameters
     sampling_params = SamplingParams(
-        temperature=1.0,
+        temperature=0.0,
         top_p=1.0,
         max_tokens=1024,
         stop=["</answer>"],
