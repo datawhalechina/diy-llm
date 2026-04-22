@@ -192,10 +192,3 @@ def sft_microbatch_train_step(
         "microbatch_loss": microbatch_loss.detach(),
     }
     return loss, metadata
-
-
-    return log_dict
-
-
-
-
