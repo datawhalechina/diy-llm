@@ -173,6 +173,7 @@ CS336-Chinese-co-construction/
 </table>
 
 - 感谢 [@aimetrics](https://github.com/aimetrics) 在[作业1 的 train.py](https://github.com/datawhalechina/diy-llm/blob/main/coursework/assignment1-basics/train.py) 中，增加了在 Macbook 设备上的 MPS 支持
+- 感谢[@FuTseYi](https://github.com/FuTseYi)(Datawhale成员)对网站迁移、部署和重构的支持
 
 *注：我们感谢每一位为项目做出贡献的开发者！*
 
