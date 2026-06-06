@@ -61,7 +61,8 @@
 | [第12章 评估与基准测试](docs/chapter12/chapter12_评估与基准测试.md) | 指标体系与评测方法 | [作业6](coursework/assignment6-evaluation/) | ✅ |
 | [第13章 大模型的基本训练流程](docs/chapter13/chapter13_第十三章大模型的基本训练流程.md) | 预训练、SFT、RL 流程 | [作业5](coursework/assignment5-alignment/) | ✅ |
 | [第14章 可验证奖励的强化学习](docs/chapter14/chapter14_可验证奖励的强化学习.md) | RLVR 思想与实践 | [作业5](coursework/assignment5-alignment/) | ✅ |
-| [第15章 扩展内容](docs/chapter15/) | 1. 什么是LLM推理？ 2. LLM 的未来 - Lecun| - | 🔄 |
+| [第15章 扩展内容](docs/chapter15/) | 1. 什么是LLM推理？  （黎又榛）
+2. LLM 的未来 - Lecun（黎又榛、jiangyinhe、李盛康、徐虎）| - | 🔄 |
 
 > 状态图例说明：✅ 已完成  🔄 更新中	📝 待完善	🚧 筹备中	 ⏸️ 暂缓	
 
