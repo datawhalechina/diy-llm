@@ -61,7 +61,7 @@
 | [第12章 评估与基准测试](chapter12/chapter12_评估与基准测试.md) | 指标体系与评测方法 | [作业6](../coursework/assignment6-evaluation/) | ✅ |
 | [第13章 大模型的基本训练流程](chapter13/chapter13_第十三章大模型的基本训练流程.md) | 预训练、SFT、RL 流程 | [作业5](../coursework/assignment5-alignment/) | ✅ |
 | [第14章 可验证奖励的强化学习](chapter14/chapter14_可验证奖励的强化学习.md) | RLVR 思想与实践 | [作业5](../coursework/assignment5-alignment/) | ✅ |
-| [第15章 扩展内容](docs/chapter15/) | - 什么是LLM推理？ | - | 🔄 |
+| [第15章 扩展内容](docs/chapter15/) | 1. 什么是LLM推理？ 2. LLM 的未来 - Lecun| - | 🔄 |
 
 > 状态图例说明：✅ 已完成  🔄 更新中	📝 待完善	🚧 筹备中	 ⏸️ 暂缓	
 
@@ -176,6 +176,7 @@ CS336-Chinese-co-construction/
 
 - 感谢 [@aimetrics](https://github.com/aimetrics) 在[作业1 的 train.py](https://github.com/datawhalechina/diy-llm/blob/main/coursework/assignment1-basics/train.py) 中，增加了在 Macbook 设备上的 MPS 支持
 - 感谢[@FuTseYi](https://github.com/FuTseYi)(Datawhale成员)对网站迁移、部署和重构的支持
+- 感谢[@jiangyinhe](https://github.com/jiangyinhe)参与第 15 章扩展内容《LLM 的未来 - Lecun》的整理
 
 *注：我们感谢每一位为项目做出贡献的开发者！*
 
