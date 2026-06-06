@@ -1105,7 +1105,7 @@ LLM之所以强大，是因为语言这个特殊介质恰好让"下一token预�
 
 ***
 
-## 参考资料（可能不完整，随时补充！）
+## 参考资料
 
 - <https://x.com/jacobeffron/status/2055279354821607551​>
 - [LeWorldModel Paper](https://arxiv.org/abs/2603.19312)
