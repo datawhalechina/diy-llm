@@ -963,7 +963,7 @@ $K = LayerNorm(W_k(x))$
 
 $logits = QK^T / \sqrt(d_k)$
 
-在进行**softmax**点积运算之前，先让**查询向量和键向量通过层归一化层**。这是另一种控制softmax行为的思路——不是控制归一化因子z，而是通过控制softmax输入的数值范围来自然抑制不良行为。正如我之前提到的，这最初是视觉和多模态模型领域的创新：Dehgani等人2023年关于训练超大视觉变压器的论文首次提出，随后HuggingFace的Chameleon和Idefics在多模态训练组件中采用了这个技巧，现在Gemma2、DCLM、OLMo2等模型也都使用这种技术来稳定训练。
+在进行**softmax**点积运算之前，先让**查询向量和键向量通过层归一化层**。这是另一种控制softmax行为的思路——不是控制归一化因子z，而是通过控制softmax输入的数值范围来自然抑制不良行为。正如我之前提到的，这最初是视觉和多模态模型领域的创新：Dehgani等人2023年关于训练超大视觉 transformer 的论文首次提出，随后HuggingFace的Chameleon和Idefics在多模态训练组件中采用了这个技巧，现在Gemma2、DCLM、OLMo2等模型也都使用这种技术来稳定训练。
 
 这最初是**视觉和多模态模型领域的创新**：Dehgani等人2023年关于训练超大视觉transformer的论文首次提出，随后HuggingFace的Chameleon和Idefics在多模态训练组件中采用了这个技巧，现在Gemma2、DCLM、OLMo2等模型也都使用这种技术来稳定训练。
 
