@@ -228,7 +228,7 @@ diy-llm/
 
 如果这个项目对你有帮助，欢迎给个 Star ⭐️！
 
-[![Star History Chart](https://api.star-history.com/svg?repos=datawhalechina/diy-llm&type=Date)](https://star-history.com/#datawhalechina/diy-llm&Date)
+[![Star History Chart](https://star-history.dera.page/svg?repos=datawhalechina/diy-llm)](https://star-history.dera.page/#datawhalechina/diy-llm)
 
 ---
 
