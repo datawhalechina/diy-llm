@@ -1,12 +1,6 @@
 import re
-from typing import Tuple
-import re
-import nltk
+
 from nltk.tokenize import word_tokenize
-from resiliparse.extract.html2text import extract_plain_text
-from resiliparse.parse.encoding import detect_encoding
-
-
 from resiliparse.extract.html2text import extract_plain_text
 from resiliparse.parse.encoding import detect_encoding
 
@@ -35,7 +29,7 @@ def run_extract_text_from_html_bytes(html_bytes: bytes) -> str:
 
     return text
 
-def run_mask_emails(text: str) -> Tuple[str, int]:
+def run_mask_emails(text: str) -> tuple[str, int]:
     """
     屏蔽字符串中的电子邮件地址。
 
@@ -63,7 +57,7 @@ def run_mask_emails(text: str) -> Tuple[str, int]:
     return masked_text, len(matches)
 
 
-def run_mask_phone_numbers(text: str) -> Tuple[str, int]:
+def run_mask_phone_numbers(text: str) -> tuple[str, int]:
 
 
     phone_pattern = re.compile(
@@ -82,7 +76,7 @@ def run_mask_phone_numbers(text: str) -> Tuple[str, int]:
 
     return masked_text, len(matches)
 
-def run_mask_ips(text: str) -> Tuple[str, int]:
+def run_mask_ips(text: str) -> tuple[str, int]:
     """
     屏蔽 IPv4 地址
     """
@@ -126,7 +120,9 @@ def run_gopher_quality_filter(text: str) -> bool:
         return False  # 字数过少或过多
     
     # 将文本按空白字符分词
-    words = word_tokenize(text)
+    # ``preserve_line`` avoids downloading the punkt_tab resource.  The
+    # assignment only needs token statistics here, not sentence segmentation.
+    words = word_tokenize(text, preserve_line=True)
     
     # 规则2：单词平均长度过滤
     if len(words) > 0:
@@ -149,4 +145,3 @@ def run_gopher_quality_filter(text: str) -> bool:
     
     # 所有规则都通过
     return True
-
