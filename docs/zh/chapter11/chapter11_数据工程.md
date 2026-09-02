@@ -1000,6 +1000,73 @@ print("是否成为LSH候选相似对:", is_candidate)
 
 在大规模数据处理中，LSH可以快速筛选相似文档。
 
+## 11.2.3 从 WET 到去重数据的最小管线
+
+为了把上面的过滤和去重方法串成一个可复现的练习，`coursework/assignment4-data`
+提供了一个不依赖模型权重的 WET 小案例。WET 是 Common Crawl 从网页归档中提取出的
+纯文本记录，因此可以直接进入 assignment4 的数据处理路径。脚本只读取固定 WET 文件
+的前若干条 `conversion` 记录，便于在 CPU 上完成端到端验证。
+
+脚本通过 `--language en|zh` 选择规则配置。英文 profile 直接复用 assignment4 中面向
+英文网页的 Gopher 规则，其中包括“至少 80% 的单词含有拉丁字母”的条件。中文 profile
+参考 [ChineseWebText 的 EvalWeb 预处理规则](https://github.com/CASIA-LM/ChineseWebText)，
+使用总长度、非空行的平均长度、中文字符比例和文档内 13-gram 重复率，并在此基础上加入
+一个可审计的敏感内容硬过滤层。词表取自
+[SpaceGather/worldwide-sensitive-word-collection](https://github.com/SpaceGather/worldwide-sensitive-word-collection)
+的 `zh-CN/pornography.csv`，按 MIT 许可随代码分发，许可文本见
+[`THIRD_PARTY_NOTICES.md`](../../../coursework/assignment4-data/cs336_data/THIRD_PARTY_NOTICES.md)。
+默认命中一个词即拒绝文档，同时保留 ChineseWebText 的“每个非空行敏感词数超过 0.5”规则；
+前者是为小案例去除明显成人广告而增加的保守页级 guard。也可以通过 `--chinese-sensitive-words`、`--chinese-max-sensitive-words-per-line` 和
+`--chinese-min-sensitive-terms` 替换词表或调整阈值。这样不需要引入模型权重，仍能把明显的
+成人广告和敏感内容挡在去重之前。
+
+处理顺序如下：
+
+| 阶段 | 操作 | `stats.json` 中的计数 |
+| --- | --- | --- |
+| 输入 | 读取 WET conversion 记录 | `input_records` |
+| 基础过滤 | 文本归一化、长度范围和语言专用质量规则 | 英文：`empty`、`too_short`、`too_long`、`gopher_rejected`；中文：`chinese_too_short`、`chinese_short_lines`、`chinese_low_cjk_ratio`、`chinese_sensitive_content`、`chinese_internal_repetition` |
+| 隐私处理 | 复用本作业已有的邮箱、电话和 IPv4 脱敏函数 | `pii_replacements` |
+| 精确去重 | 对脱敏后的文档计算 SHA-256，仅保留首次出现的文档 | `exact_duplicates`、`after_exact_dedup` |
+| 近重复去重 | 字符 shingle + MinHash/LSH，再用真实 Jaccard 相似度复核 | `minhash_candidate_pairs`、`minhash_duplicates` |
+| 输出 | 写入 JSONL | `output_records` |
+
+在仓库根目录执行：
+
+```sh
+cd coursework/assignment4-data
+uv sync
+mkdir -p data
+WET_URL="https://data.commoncrawl.org/crawl-data/CC-MAIN-2025-51/segments/1764871306713.64/wet/CC-MAIN-20251204191828-20251204221828-00000.warc.wet.gz"
+curl -L --fail --retry 3 -o data/CC-MAIN-20251204191828-20251204221828-00000.warc.wet.gz "$WET_URL"
+echo "fca9d05b20facc17f7baa6cf9086be19bc07e7b05c8afc266766a16dd3c9cd03  data/CC-MAIN-20251204191828-20251204221828-00000.warc.wet.gz" | sha256sum -c -
+uv run python scripts/run_small_pipeline.py \
+  --input data/CC-MAIN-20251204191828-20251204221828-00000.warc.wet.gz \
+  --output-dir outputs/wet-demo-en \
+  --language en \
+  --max-records 1000
+uv run python scripts/run_small_pipeline.py \
+  --input data/CC-MAIN-20251204191828-20251204221828-00000.warc.wet.gz \
+  --output-dir outputs/wet-demo-zh \
+  --language zh \
+  --max-records 1000
+```
+
+每个输出目录都会生成 `filtered.jsonl` 和 `stats.json`。后者同时保存输入文件路径、
+所有阈值和各阶段前后数量，便于复核结果；原始 WET 文件和输出数据均不提交到仓库。
+实现位于
+[`cs336_data/pipeline.py`](../../../coursework/assignment4-data/cs336_data/pipeline.py)，
+MinHash/LSH 细节位于
+[`cs336_data/deduplication.py`](../../../coursework/assignment4-data/cs336_data/deduplication.py)。
+
+同一份 WET 文件读取前 1000 条记录的一次 CPU 结果如下。英文 profile 最终输出 281 条：
+过滤拒绝 675 条，精确去重删除 3 条，MinHash 近重复删除 3 条。中文 profile 最终输出
+105 条：长度过短 81 条、平均行长过短 27 条、中文字符比例过低 646 条、敏感内容 120 条、
+文档内重复率过高 4 条，精确去重删除 1 条，MinHash 产生 3 个候选对但没有判定为近重复。
+加入敏感内容层后，进入去重的记录由原来的 224 条降为 106 条；样例中的词表命中记录不会
+进入输出。中文 profile 没有把英文 Gopher 的拉丁字母比例误用于中文文本。中文规则仍是
+启发式实现，繁简转换和 BERT/FastText 评分没有默认启用，结果应结合抽样检查解读。
+
 # 11.3 数据相关研究
 **训练数据安全**
 
