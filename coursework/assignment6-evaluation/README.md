@@ -16,6 +16,7 @@ assignment6_evaluation/
 │   └── 20260120_000654/         
 ├── images/                      # 图片
 │   └── evalscope_panel.png      
+├── lm-evaluation-harness/       # lm-evaluation-harness 框架源码
 └── README.md                    # 本文件
 ```
 
@@ -59,12 +60,14 @@ assignment6_evaluation/
 ### 环境准备
 
 ```bash
-# 1. 创建并激活虚拟环境（也可以使用 Conda）
-python -m venv .venv
-source .venv/bin/activate
+# 1. 创建并激活conda环境
+conda create -n eval_env python=3.10
+conda activate eval_env
 
-# 2. 安装 lm-evaluation-harness、Hugging Face 后端和数学任务依赖
-python -m pip install "lm_eval[hf,math]"
+# 2. 安装lm-evaluation-harness
+cd lm-evaluation-harness
+pip install -e .
+pip install -e .[math]
 
 # 3. 安装evalscope
 pip install evalscope

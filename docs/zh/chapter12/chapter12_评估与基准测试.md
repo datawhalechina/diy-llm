@@ -350,25 +350,11 @@ HellaSwag 可以看作是“情境下的困惑度”，模型不需要输出概�
 
 ### C-Eval：中文多学科知识评测
 
-[C-Eval](https://arxiv.org/abs/2305.08322) 是面向中文场景的多项选择评测集，覆盖 52 个学科和四个难度层级，共 13,948 道题目。它既包含基础学科，也包含法律、医学和职业资格等专业科目，能够补充 MMLU 主要面向英文知识的局限。
+[C-Eval](https://arxiv.org/abs/2305.08322) 是面向中文场景的多项选择评测集，覆盖 52 个学科和四个难度层级，共 13,948 道题目。它既包含基础学科，也包含法律、医学和职业资格等专业科目，用来补上 MMLU 主要考英文知识的缺口。
 
-C-Eval 的每个科目包含 `dev`、`val` 和 `test` 三个 split。`dev` 用来提供 few-shot 示例，`val` 适合本地复现和调参，`test` 用于最终模型评测。`lm-evaluation-harness` 的内置任务采用验证集：任务组名为 `ceval-valid`，单科目任务名形如 `ceval-valid_logic`；官方流程要求测试集预测提交到外部评测站点，因此不能把本地 `val` 分数直接当作测试集成绩。模型会分别计算四个选项的条件对数似然，选择得分最高的选项；`acc` 是直接准确率，`acc_norm` 会按选项长度归一化后再比较。
+每个科目分成 `dev`、`val` 和 `test`。`dev` 提供 few-shot 示例，`val` 方便本地核对，`test` 用于最终报分。官方要求测试集预测提交到评测站点，所以本地验证集分数不能直接当成测试集成绩。评测时模型分别计算四个选项的条件对数似然，再选得分最高的一项。`acc` 是直接准确率，`acc_norm` 会按选项长度归一化后再比较。
 
-在 Assignment 6 中，可以先运行逻辑学子集检查接入是否正确：
-
-```bash
-lm-eval validate --tasks ceval-valid_logic
-lm-eval run \
-  --model hf \
-  --model_args pretrained=Qwen/Qwen2.5-0.5B,dtype=float32 \
-  --tasks ceval-valid_logic \
-  --num_fewshot 0 \
-  --limit 10 \
-  --device cpu \
-  --batch_size 8
-```
-
-`--batch_size 8` 可在 CPU 上提高吞吐；内存不足时可降为 `1`，不建议为每个学科启动独立进程。`--limit 10` 只用于快速验证流程，结果应注明任务、模型版本、样本数和 few-shot 设置。需要本地复现完整验证集时，将任务改为 `ceval-valid` 并去掉 `--limit`；测试集需遵循 C-Eval 官方提交流程。题库由 [C-Eval 官方仓库](https://github.com/hkust-nlp/ceval)维护，数据集采用 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) 许可，使用时应保留来源和论文引用。
+题库由 [C-Eval 官方仓库](https://github.com/hkust-nlp/ceval) 维护，采用 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) 许可，使用时保留来源和论文引用。
 
 ### GPQA (Graduate-Level Google-Proof Q&A)
 
