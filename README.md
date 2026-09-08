@@ -1,6 +1,10 @@
 <div align='center'>
     <img src="./docs/public/diy-llm.png" alt="alt text" width="100%">
     <h1>Diy-LLM</h1>
+    <p>
+      <a href="./README.md"><img src="https://img.shields.io/badge/简体中文-0969da?style=for-the-badge" alt="简体中文"></a>
+      <a href="./README_EN.md"><img src="https://img.shields.io/badge/English-d1d5db?style=for-the-badge" alt="English"></a>
+    </p>
 </div>
 
 <div align="center">
@@ -126,7 +130,8 @@ diy-llm/
 │   ├── assignment4-data/          # 作业4：预训练数据处理
 │   ├── assignment5-alignment/     # 作业5：对齐
 │   └── assignment6-evaluation/    # 作业6：评估
-├── README.md               # 项目说明
+├── README.md               # 中文项目说明
+├── README_EN.md            # English project overview
 └── .gitignore              # Git忽略配置
 ```
 

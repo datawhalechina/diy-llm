@@ -1,13 +1,23 @@
 # 第十四章：可验证奖励的强化学习 (RLVR)
 
-在之前的课程中，我们讨论了 RLHF（基于人类反馈的强化学习）。虽然 RLHF 是使模型遵循指令的关键，但它面临着巨大的扩展性挑战：人类反馈昂贵、缓慢且容易被“过度优化”（Goodhart's Law）。
+在之前的课程中，我们讨论了 RLHF（Reinforcement Learning from Human Feedback，基于人类反馈的强化学习）。虽然 RLHF 是使模型遵循指令的关键，但它面临着巨大的扩展性挑战：人类反馈昂贵、缓慢且容易被“过度优化”（Goodhart's Law）。
 
-本章我们将目光转向 **o1** 和 **DeepSeek R1** 等推理模型背后的核心技术——**RLVR (Reinforcement Learning from Verifiable Rewards)**。
+本章我们将目光转向 **o1** 和 **DeepSeek R1** 等推理模型背后的核心技术——**RLVR (Reinforcement Learning from Verifiable Rewards，基于可验证奖励的强化学习)**。
 
 **核心目标：**
 1.  **算法演进**：理解从 PPO 到 GRPO 的演变逻辑，以及为什么 GRPO 更适合大模型推理训练。
 2.  **工程实现**：深入 PPO 和 GRPO 的代码实现细节，掌握 Advantage 计算与 Loss 设计。
 3.  **前沿案例**：解构 DeepSeek R1、Kimi k1.5 和 Qwen 3 的训练流水线，理解“冷启动数据”、“思维链（CoT）”与“长度控制”的关键作用。
+
+### 缩写速查表
+
+| 缩写 | 英文全称 | 中文名 | 主要作用 |
+|------|----------|--------|----------|
+| **RLHF** | Reinforcement Learning from Human Feedback | 基于人类反馈的强化学习 | 通过收集人类偏好数据训练奖励模型，再使用强化学习微调大模型，使模型输出更符合人类价值观和预期，是当前对齐技术的核心框架。 |
+| **RLVR** | Reinforcement Learning from Verifiable Rewards | 基于可验证奖励的强化学习 | 利用可自动验证的客观信号（如数学题答案正确性、代码执行结果）作为奖励，无需人工标注，有效提升模型在推理、数学等领域的准确性。 |
+| **PPO** | Proximal Policy Optimization | 近端策略优化 | 一种强化学习策略优化算法，通过裁剪概率比率限制参数更新幅度，兼顾训练稳定性和样本效率，是目前 RLHF 最常用的底层算法。 |
+| **GRPO** | Group Relative Policy Optimization | 组相对策略优化 | 对 PPO 的改进（由 DeepSeek 提出），无需单独的价值网络，在组内通过相对奖励标准化来降低方差，减少显存占用并加速训练，特别适用于大规模模型。 |
+| **TRPO** | Trust Region Policy Optimization | 信任域策略优化 | 通过约束策略更新的 KL 散度来确保每次更新在“信任域”内，保证单调提升，是 PPO 的前身，理论上更稳定但计算开销较大，实际应用较少。 |
 
 ## 14.1 为什么需要 RLVR？
 
@@ -1071,4 +1081,3 @@ Qwen 3 提出了 **Thinking Mode Fusion**，试图在一个模型中融合“思
 *   **训练**: 混合使用带 `<think>` 的数据和直接输出答案的数据。
 *   **效果**: 用户可以通过 Prompt 控制模型是否进行长推理。
 *   **测试时计算 (Test-time Compute)**: 可以在推理阶段通过截断 `<think>` 过程来动态调整计算量和性能的平衡。
-
