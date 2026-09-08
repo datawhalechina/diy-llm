@@ -13,11 +13,34 @@
 
 | 缩写 | 英文全称 | 中文名 | 主要作用 |
 |------|----------|--------|----------|
+| **RL** | Reinforcement Learning | 强化学习 | 通过环境反馈的奖励信号优化策略，使模型逐步学会采取能够获得更高回报的行为。 |
 | **RLHF** | Reinforcement Learning from Human Feedback | 基于人类反馈的强化学习 | 通过收集人类偏好数据训练奖励模型，再使用强化学习微调大模型，使模型输出更符合人类价值观和预期，是当前对齐技术的核心框架。 |
 | **RLVR** | Reinforcement Learning from Verifiable Rewards | 基于可验证奖励的强化学习 | 利用可自动验证的客观信号（如数学题答案正确性、代码执行结果）作为奖励，无需人工标注，有效提升模型在推理、数学等领域的准确性。 |
-| **PPO** | Proximal Policy Optimization | 近端策略优化 | 一种强化学习策略优化算法，通过裁剪概率比率限制参数更新幅度，兼顾训练稳定性和样本效率，是目前 RLHF 最常用的底层算法。 |
-| **GRPO** | Group Relative Policy Optimization | 组相对策略优化 | 对 PPO 的改进（由 DeepSeek 提出），无需单独的价值网络，在组内通过相对奖励标准化来降低方差，减少显存占用并加速训练，特别适用于大规模模型。 |
-| **TRPO** | Trust Region Policy Optimization | 信任域策略优化 | 通过约束策略更新的 KL 散度来确保每次更新在“信任域”内，保证单调提升，是 PPO 的前身，理论上更稳定但计算开销较大，实际应用较少。 |
+| **LLM** | Large Language Model | 大语言模型 | 以海量文本训练、能够理解和生成自然语言的模型，也是本章强化学习训练的主要对象。 |
+| **LM** | Language Model | 语言模型 | 根据上下文对下一个 token 建模并生成序列的模型；本章中的 Policy LM 是正在被优化的策略模型。 |
+| **CoT** | Chain of Thought | 思维链 | 让模型显式生成中间推理步骤，有助于提升复杂数学、代码和逻辑任务的推理能力。 |
+| **SFT** | Supervised Fine-Tuning | 监督微调 | 使用带有目标答案或示范推理过程的数据对预训练模型进行有监督训练，常用于 RL 之前的冷启动。 |
+| **DPO** | Direct Preference Optimization | 直接偏好优化 | 绕过显式奖励模型和在线强化学习，直接利用偏好数据优化策略的对齐方法。 |
+| **RM** | Reward Model | 奖励模型 | 根据任务目标或人类偏好为模型输出打分，为策略优化提供奖励信号。 |
+| **VM** | Value Model | 价值模型 | 估计给定状态未来能够获得的回报，在 PPO 中用于计算优势函数。 |
+| **PPO** | Proximal Policy Optimization | 近端策略优化 | 通过裁剪概率比率限制参数更新幅度，兼顾训练稳定性和样本效率，是 RLHF 最常用的底层算法之一。 |
+| **TRPO** | Trust Region Policy Optimization | 信任域策略优化 | 通过约束策略更新的 KL 散度，确保每次更新处于“信任域”内；它是 PPO 的前身，理论上更稳定但计算开销较大。 |
+| **GRPO** | Group Relative Policy Optimization | 组相对策略优化 | DeepSeek 提出的 PPO 改进方法，无需单独的价值网络，在组内通过相对奖励标准化来降低方差，减少显存占用并加速大模型训练。 |
+| **GAE** | Generalized Advantage Estimation | 广义优势估计 | 使用多个时间步的时序差分误差估计优势函数，在偏差和方差之间取得平衡，降低策略梯度的方差。 |
+| **TD** | Temporal Difference | 时序差分 | 根据即时奖励和下一状态的价值估计更新当前价值，是 GAE 和许多价值函数方法的基础。 |
+| **KL** | Kullback–Leibler Divergence | KL 散度 / 相对熵 | 衡量两个概率分布的差异，在 PPO 和 RLHF 中常用于约束策略不要偏离参考模型太远。 |
+| **MSE** | Mean Squared Error | 均方误差 | 衡量预测值与目标值之间平方误差的损失函数，本章用于训练价值模型。 |
+| **PRM** | Process Reward Model | 过程奖励模型 | 对中间推理步骤而非只有最终答案进行评分，为模型提供更细粒度的过程监督。 |
+| **MCTS** | Monte Carlo Tree Search | 蒙特卡洛树搜索 | 通过反复模拟和扩展候选路径搜索解空间，曾被探索用于增强推理模型的测试时计算。 |
+| **RFT** | Reinforcement Fine-Tuning | 强化微调 | 根据任务奖励对模型进行强化微调；本章中通常指只奖励最终答案是否正确的基础方法。 |
+| **PS** | Process Supervision | 过程监督 | 对解题过程或中间步骤提供监督信号，而不只评价最终答案。 |
+| **OS** | Online Sampling | 在线采样 | 在训练过程中动态采样并更新数据；本章的 GRPO+OS 指标准的在线采样设置。 |
+| **RMSD** | Root Mean Square Deviation | 均方根偏差 | 衡量预测蛋白质结构与真实结构之间差异的指标，用于说明 AlphaFold 中的可验证目标。 |
+| **TTS** | Test-Time Scaling | 测试时扩展 | 在推理阶段增加或调整计算预算（例如思考 token 数），以换取更高的任务性能。 |
+| **GSM8K** | Grade School Math 8K | 小学数学应用题数据集 | 包含约 8.5K 道小学数学文字题，常用于评估模型的数学推理能力。 |
+| **MATH** | MATH benchmark | 数学推理基准 | 覆盖高中竞赛数学等多种难度的数学题，用于评估更复杂的数学推理能力。 |
+| **AIME** | American Invitational Mathematics Examination | 美国数学邀请赛 | 高难度数学竞赛评测，常用于衡量推理模型的数学能力。 |
+| **GPQA** | Graduate-Level Google-Proof Q&A | 研究生水平问答基准 | 需要专业知识和深度推理的问答评测，题目设计为不易通过简单检索解决。 |
 
 ## 14.1 为什么需要 RLVR？
 
