@@ -29,6 +29,9 @@ dependencies = [
 [tool.setuptools.packages.find]
 include = ["cs336_data", "tests"]
 
+[tool.setuptools.package-data]
+cs336_data = ["zh_sensitive_words.csv", "THIRD_PARTY_NOTICES.md"]
+
 [tool.uv]
 package = true
 python-preference = "managed"
@@ -53,3 +56,6 @@ extend-select = ["UP"]
 ignore = [
     "F722"
 ]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cs336_data"]
