@@ -563,7 +563,7 @@ def clean_punctuation(text: str) -> str:
     return text
 ```
 
-[Complete Data Anonymization Code](https://github.com/datawhalechina/diy-llm/blob/main/docs/chapter2/de_identified_data_processing.py)  
+[Complete Data Anonymization Code](https://github.com/datawhalechina/diy-llm/blob/main/docs/en/chapter2/de_identified_data_processing.py)  
 
 ### Appendix 2: Unicode-based Segmentation
 
@@ -751,7 +751,7 @@ class BPETokenizer:
         return new_tokens
 ```
 
-[BPE, Character-level, Byte-level Tokenizer Comparison](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter2/BPE_character_byte_level_word_segmentation_Comparison.py)
+[BPE, Character-level, Byte-level Tokenizer Comparison](https://github.com/datawhalechina/diy-llm/blob/main/docs/en/chapter2/BPE_character_byte_level_word_segmentation_Comparison.py)
 
 ### Appendix 5: Word-level Tokenizer
 

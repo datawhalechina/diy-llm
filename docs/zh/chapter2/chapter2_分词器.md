@@ -726,7 +726,7 @@ def clean_punctuation(text: str) -> str:
     return text
 ```
 
-[ 数据脱敏处理完整代码](https://github.com/datawhalechina/diy-llm/blob/main/docs/chapter2/de_identified_data_processing.py)  
+[ 数据脱敏处理完整代码](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter2/de_identified_data_processing.py)  
 
 ## 附录2：基于Unicode的划分策略
 
@@ -913,98 +913,98 @@ class BPETokenizer:
         return new_tokens
    ```
 
-[BPE、字符级、字节级的分词器效果对比](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter2/BPE_character_byte_level_word_segmentation_Comparison.py)
+[BPE、字符级、字节级的分词器效果对比](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter2/BPE_character_byte_level_word_segmentation_Comparison.py)
    
 ## 附录5：词级分词器
 
 ```python
-   import regex
-   
-   # deepseek tokenizer中使用的经典正则表达式（简化版）
-   TOKENIZER_REGEX =  r"\p{L}+|\p{N}+|[^\p{L}\p{N}\s]+|\s+"
-   
-   # 压缩率计算
-   def get_compression_ratio(text: str, segments):
-       byte_len = len(text.encode("utf-8"))
-       token_count = len(segments)
-       return byte_len / token_count if token_count > 0 else 1
-   
-   
-   # Word-level Tokenizer实现
-   class WordTokenizer:
-       def __init__(self, pattern=r"\w+|."):
-           """
-           pattern: 正则表达式（默认基础版：把连续字母数字合成一个词）
-           """
-           self.pattern = pattern
-           self.word2id = {}
-           self.id2word = {}
-   
-       def build_vocab(self, texts):
-           """
-           根据训练文本列表建立词表
-           """
-           vocab = set()
-           for text in texts:
-               segments = regex.findall(self.pattern, text)
-               vocab.update(segments)
-   
-           vocab = sorted(vocab)
-           self.word2id = {w: i for i, w in enumerate(vocab)}
-           self.id2word = {i: w for w, i in self.word2id.items()}
-   
-       def encode(self, text):
-           """
-           文本 → 字符串片段 → token id列表
-           未登录词 UNK = -1
-           """
-           segments = regex.findall(self.pattern, text)
-           return [self.word2id.get(seg, -1) for seg in segments], segments
-   
-       def decode(self, ids):
-           """
-           token ID → 原始片段 → 拼成字符串
-           """
-           return "".join(self.id2word.get(i, "<UNK>") for i in ids)
-   
-   # 测试
-   if __name__ == "__main__":
-   
-       string = "It's so supercalifragilisticexpialidocious!👋👋"
-       print("原始字符串：", string)
-   
-       # 使用基础正则分词（基于空格和标点切分）
-       basic_segments = regex.findall(r"\w+|.", string)
-       print("基础正则分词结果：")
-       print(basic_segments)
-   
-       # 使用deepseek风格正则
-       segments = regex.findall(TOKENIZER_REGEX, string)
-       print(f"deepseek风格分词结果：{segments}")
-   
-       # 构建词表
-       tokenizer = WordTokenizer(pattern=TOKENIZER_REGEX)
-       tokenizer.build_vocab([string])
-   
-       print("词表大小：", len(tokenizer.word2id))
-   
-       # 编码
-       ids, segs = tokenizer.encode(string)
-       print(f"编码token IDs：{ids}")
-   
-       # 字节序列
-       byte_tokens = [b for b in string.encode("utf-8")]
-       print(f"UTF-8字节序列：{byte_tokens}")
-   
-       print(f"编码segments：{segs}")
-   
-       # 解码
-       decoded = tokenizer.decode(ids)
-       print("解码结果：", decoded)
-   
-       # 压缩率
-       ratio = get_compression_ratio(string, segs)
-       print("压缩率：", ratio)
+import regex
+
+# deepseek tokenizer中使用的经典正则表达式（简化版）
+TOKENIZER_REGEX =  r"\p{L}+|\p{N}+|[^\p{L}\p{N}\s]+|\s+"
+
+# 压缩率计算
+def get_compression_ratio(text: str, segments):
+    byte_len = len(text.encode("utf-8"))
+    token_count = len(segments)
+    return byte_len / token_count if token_count > 0 else 1
+
+
+# Word-level Tokenizer实现
+class WordTokenizer:
+    def __init__(self, pattern=r"\w+|."):
+        """
+        pattern: 正则表达式（默认基础版：把连续字母数字合成一个词）
+        """
+        self.pattern = pattern
+        self.word2id = {}
+        self.id2word = {}
+
+    def build_vocab(self, texts):
+        """
+        根据训练文本列表建立词表
+        """
+        vocab = set()
+        for text in texts:
+            segments = regex.findall(self.pattern, text)
+            vocab.update(segments)
+
+        vocab = sorted(vocab)
+        self.word2id = {w: i for i, w in enumerate(vocab)}
+        self.id2word = {i: w for w, i in self.word2id.items()}
+
+    def encode(self, text):
+        """
+        文本 → 字符串片段 → token id列表
+        未登录词 UNK = -1
+        """
+        segments = regex.findall(self.pattern, text)
+        return [self.word2id.get(seg, -1) for seg in segments], segments
+
+    def decode(self, ids):
+        """
+        token ID → 原始片段 → 拼成字符串
+        """
+        return "".join(self.id2word.get(i, "<UNK>") for i in ids)
+
+# 测试
+if __name__ == "__main__":
+
+    string = "It's so supercalifragilisticexpialidocious!👋👋"
+    print("原始字符串：", string)
+
+    # 使用基础正则分词（基于空格和标点切分）
+    basic_segments = regex.findall(r"\w+|.", string)
+    print("基础正则分词结果：")
+    print(basic_segments)
+
+    # 使用deepseek风格正则
+    segments = regex.findall(TOKENIZER_REGEX, string)
+    print(f"deepseek风格分词结果：{segments}")
+
+    # 构建词表
+    tokenizer = WordTokenizer(pattern=TOKENIZER_REGEX)
+    tokenizer.build_vocab([string])
+
+    print("词表大小：", len(tokenizer.word2id))
+
+    # 编码
+    ids, segs = tokenizer.encode(string)
+    print(f"编码token IDs：{ids}")
+
+    # 字节序列
+    byte_tokens = [b for b in string.encode("utf-8")]
+    print(f"UTF-8字节序列：{byte_tokens}")
+
+    print(f"编码segments：{segs}")
+
+    # 解码
+    decoded = tokenizer.decode(ids)
+    print("解码结果：", decoded)
+
+    # 压缩率
+    ratio = get_compression_ratio(string, segs)
+    print("压缩率：", ratio)
    ```
 
 ## 附录6：BPE分词器简易训练
