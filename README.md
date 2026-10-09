@@ -209,11 +209,14 @@ diy-llm/
   </tbody>
 </table>
 
+### 社区贡献
+
 - 感谢 [@aimetrics](https://github.com/aimetrics) 在[作业1 的 train.py](https://github.com/datawhalechina/diy-llm/blob/main/coursework/assignment1-basics/train.py) 中，增加了在 Macbook 设备上的 MPS 支持
 - 感谢[@FuTseYi](https://github.com/FuTseYi)(Datawhale成员)对网站迁移、部署和重构的支持
 - 感谢[@jiangyinhe](https://github.com/jiangyinhe)参与第 16 章扩展内容《LLM 的未来 - Lecun》的整理；基于中文版内容实现了第一章、前言的英文版翻译；
+- 感谢[@Excelius-Wang](https://github.com/Excelius-Wang) 补充 C-EVAL 中文 benchmark 的介绍，并接入到 assignment6 中
 
-*注：我们感谢每一位为项目做出贡献的开发者！*
+*注：我们感谢每一位为项目做出贡献的开发者，也欢迎社区的小伙伴积极参与贡献！*
 
 我们欢迎所有形式的贡献！无论是文档改进、代码优化、bug修复还是新内容添加，都是对项目的宝贵支持。
 
