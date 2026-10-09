@@ -348,6 +348,14 @@ HellaSwag 可以看作是“情境下的困惑度”，模型不需要输出概�
    <p>图12.17 MMLU-pro对比MMLU</p>
  </div>
 
+### C-Eval：中文多学科知识评测
+
+[C-Eval](https://arxiv.org/abs/2305.08322) 是面向中文场景的多项选择评测集，覆盖 52 个学科和四个难度层级，共 13,948 道题目。它既包含基础学科，也包含法律、医学和职业资格等专业科目，用来补上 MMLU 主要考英文知识的缺口。
+
+每个科目分成 `dev`、`val` 和 `test`。`dev` 提供 few-shot 示例，`val` 方便本地核对，`test` 用于最终报分。官方要求测试集预测提交到评测站点，所以本地验证集分数不能直接当成测试集成绩。评测时模型分别计算四个选项的条件对数似然，再选得分最高的一项。`acc` 是直接准确率，`acc_norm` 会按选项长度归一化后再比较。
+
+题库由 [C-Eval 官方仓库](https://github.com/hkust-nlp/ceval) 维护，采用 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) 许可，使用时保留来源和论文引用。
+
 ### GPQA (Graduate-Level Google-Proof Q&A)
 
 [GPQA](https://arxiv.org/abs/2311.12022) 由 61 名 PhD 通过 Upwork 平台设计的高难度问题。目标是创建“防谷歌”问题，即非专家即使花 30 分钟用谷歌搜索也难以解答。
@@ -647,6 +655,7 @@ ARC-AGI-1:
 
 - [MMLU (Hendrycks et al., 2021)](https://arxiv.org/abs/2009.03300)
 - [MMLU-Pro (Wang et al., 2024)](https://arxiv.org/abs/2406.01574)
+- [C-Eval (Huang et al., 2023)](https://arxiv.org/abs/2305.08322)
 - [GPQA (Rein et al., 2023)](https://arxiv.org/abs/2311.12022)
 - [HLE (Phan et al., 2025)](https://arxiv.org/abs/2501.14249)
 - [Chatbot Arena (Chiang et al., 2024)](https://arxiv.org/abs/2403.04132)

@@ -8,6 +8,7 @@ os.environ["HF_ALLOW_CODE_EVAL"] = "1"
 eval_model_path = "openai-community/gpt2"
 zero_shot_tasks = ["arc_easy", "piqa", "lambada", "triviaqa"] # 常识推理+语言理解
 few_shot_tasks = ["humaneval", "mbpp", "gsm8k", "minerva_math"] # 代码+数学
+chinese_tasks = ["ceval-valid_logic"] # C-Eval 中文逻辑学子集
 all_results = {}
 
 # 🔥 关键：只创建一次模型实例
@@ -46,6 +47,17 @@ results_few = evaluator.simple_evaluate(
     confirm_run_unsafe_code=True
 )
 all_results.update(results_few['results'])
+
+# ===== 3. Chinese benchmark (C-Eval) =====
+print(f"Evaluating Chinese benchmark tasks: {chinese_tasks}")
+results_chinese = evaluator.simple_evaluate(
+    model=lm,  # 复用同一个 lm 实例
+    tasks=chinese_tasks,
+    num_fewshot=0,
+    limit=1,
+    batch_size=8
+)
+all_results.update(results_chinese['results'])
 
 print("Combined results keys:", list(all_results.keys()))
 print("all_results:",all_results)
