@@ -197,11 +197,14 @@ Join the Diy-LLM reader groups to study, exchange ideas, and help one another. I
   </tbody>
 </table>
 
+### Community Contributions
+
 - Thanks to [@aimetrics](https://github.com/aimetrics) for adding MPS support for MacBook devices to [Assignment 1's `train.py`](https://github.com/datawhalechina/diy-llm/blob/main/coursework/assignment1-basics/train.py).
 - Thanks to [@FuTseYi](https://github.com/FuTseYi), a Datawhale member, for supporting the website migration, deployment, and refactoring.
 - Thanks to [@jiangyinhe](https://github.com/jiangyinhe) for helping prepare Chapter 16's extended topic “The Future of LLMs—LeCun,” and for translating the Foreword and Chapter 1 into English from the Chinese material.
+- Thanks to [@Excelius-Wang](https://github.com/Excelius-Wang) for adding an introduction to the C-EVAL Chinese benchmark and integrating it into Assignment 6.
 
-*We appreciate every developer who has contributed to this project!*
+*We appreciate every developer who has contributed to this project, and we welcome community members to get involved!*
 
 Contributions of all kinds are welcome. Improvements to the documentation, code optimizations, bug fixes, and new content are all valuable to the project.
 
