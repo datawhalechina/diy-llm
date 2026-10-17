@@ -1,0 +1,27 @@
+{
+  "task": "m3ke_chinese_high_school_dev",
+  "lm_eval_version": "0.4.13",
+  "datasets_version": "5.1.0",
+  "python": "3.12",
+  "dataset": {
+    "name": "TJUNLP/M3KE",
+    "subject": "Chinese-Arts & Humanities-High school",
+    "split": "dev",
+    "samples": 5,
+    "archive_revision": "b370aae92167610791c34d16ef1b5a3e41805e62",
+    "archive_sha256": "02e6f4cb67338d10013d3d334c871aac44e65c5def469428a7707cbc5b88d29d"
+  },
+  "model": "dummy",
+  "purpose": "random baseline for smoke-testing task loading and metric aggregation; not a model capability score",
+  "settings": {
+    "num_fewshot": 0,
+    "limit": 5,
+    "seed": [1234, 1234, 1234, 1234]
+  },
+  "metrics": {
+    "acc": 0.2,
+    "acc_stderr": 0.2,
+    "acc_norm": 0.2,
+    "acc_norm_stderr": 0.2
+  }
+}
