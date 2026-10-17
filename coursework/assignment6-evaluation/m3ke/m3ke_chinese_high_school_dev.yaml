@@ -1,0 +1,20 @@
+task: m3ke_chinese_high_school_dev
+task_alias: M3KE Chinese high school (labeled dev, 5 examples)
+tag: chinese
+custom_dataset: !function prepare_m3ke.load_m3ke_dev
+validation_split: validation
+fewshot_split: validation
+num_fewshot: 0
+output_type: multiple_choice
+doc_to_text: "{{question.strip()}}\nA. {{A}}\nB. {{B}}\nC. {{C}}\nD. {{D}}\n答案："
+doc_to_choice: ["A", "B", "C", "D"]
+doc_to_target: "{{['A', 'B', 'C', 'D'].index(answer.strip())}}"
+metric_list:
+  - metric: acc
+    aggregation: mean
+    higher_is_better: true
+  - metric: acc_norm
+    aggregation: mean
+    higher_is_better: true
+metadata:
+  version: 1.0
