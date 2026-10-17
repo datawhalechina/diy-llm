@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="930" viewBox="0 0 1440 930" role="img" aria-labelledby="title desc">
+  <title id="title">注意力 Softmax 的稳定化位置</title>
+  <desc id="desc">比较标准注意力流程、Q/K 归一化和 logits 软截断三种路径，并标出干预发生在 Softmax 之前的位置。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#f8fbff"/>
+      <stop offset="1" stop-color="#eef3fa"/>
+    </linearGradient>
+    <style>
+      text { font-family: "Microsoft YaHei", "Noto Sans CJK SC", "PingFang SC", sans-serif; fill: #172b4d; }
+      .title { font-size: 31px; font-weight: 700; }
+      .subtitle { font-size: 17px; fill: #526581; }
+      .row-title { font-size: 17px; font-weight: 700; }
+      .node-title { font-size: 18px; font-weight: 700; }
+      .node-sub { font-size: 14px; fill: #526581; }
+      .small { font-size: 15px; fill: #526581; }
+      .equation { font-size: 23px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="930" rx="26" fill="url(#bg)"/>
+  <text x="58" y="67" class="title">注意力 Softmax 的稳定化位置</text>
+  <text x="58" y="101" class="subtitle">三种路径共享同一条注意力计算链；稳定化方法改变的是 Softmax 之前的处理位置。</text>
+
+  <g>
+    <rect x="58" y="130" width="1324" height="58" rx="15" fill="#e6eef9"/>
+    <text x="82" y="166" class="small">输入</text>
+    <text x="254" y="166" class="small">Q/K 预处理</text>
+    <text x="470" y="166" class="small">缩放点积</text>
+    <text x="690" y="166" class="small">logits 处理</text>
+    <text x="913" y="166" class="small">归一化</text>
+    <text x="1123" y="166" class="small">注意力权重</text>
+  </g>
+
+  <g>
+    <rect x="36" y="204" width="1368" height="184" rx="20" fill="#ffffff" stroke="#d7e0ed"/>
+    <rect x="52" y="266" width="142" height="54" rx="14" fill="#edf2f8"/>
+    <text x="123" y="299" text-anchor="middle" class="row-title">标准流程</text>
+
+    <rect x="210" y="246" width="154" height="86" rx="15" fill="#f5f7fa" stroke="#cbd5e1" stroke-width="2"/>
+    <text x="287" y="281" text-anchor="middle" class="node-title">Q、K</text>
+    <text x="287" y="308" text-anchor="middle" class="node-sub">原始向量</text>
+    <line x1="366" y1="289" x2="391" y2="289" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="400" y="246" width="170" height="86" rx="15" fill="#f5f7fa" stroke="#cbd5e1" stroke-width="2"/>
+    <text x="485" y="281" text-anchor="middle" class="node-title">直接计算</text>
+    <text x="485" y="308" text-anchor="middle" class="node-sub">不做 Q/K 归一化</text>
+    <line x1="572" y1="289" x2="597" y2="289" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="606" y="246" width="170" height="86" rx="15" fill="#edf4ff" stroke="#a9c5ef" stroke-width="2"/>
+    <text x="691" y="281" text-anchor="middle" class="node-title">缩放点积</text>
+    <text x="691" y="308" text-anchor="middle" class="node-sub">QKᵀ / √dₖ</text>
+    <line x1="778" y1="289" x2="803" y2="289" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="812" y="246" width="170" height="86" rx="15" fill="#f5f7fa" stroke="#cbd5e1" stroke-width="2"/>
+    <text x="897" y="281" text-anchor="middle" class="node-title">原始 logits</text>
+    <text x="897" y="308" text-anchor="middle" class="node-sub">不额外压缩</text>
+    <line x1="984" y1="289" x2="1009" y2="289" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="1018" y="246" width="150" height="86" rx="15" fill="#edf4ff" stroke="#a9c5ef" stroke-width="2"/>
+    <text x="1093" y="281" text-anchor="middle" class="node-title">Softmax</text>
+    <text x="1093" y="308" text-anchor="middle" class="node-sub">生成权重</text>
+    <line x1="1170" y1="289" x2="1195" y2="289" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="1204" y="246" width="170" height="86" rx="15" fill="#e8f5f2" stroke="#9ccfc3" stroke-width="2"/>
+    <text x="1289" y="281" text-anchor="middle" class="node-title">注意力权重</text>
+    <text x="1289" y="308" text-anchor="middle" class="node-sub">用于加权 V</text>
+  </g>
+
+  <g>
+    <rect x="36" y="402" width="1368" height="184" rx="20" fill="#ffffff" stroke="#d7e0ed"/>
+    <rect x="52" y="464" width="142" height="54" rx="14" fill="#dff3ee"/>
+    <text x="123" y="497" text-anchor="middle" class="row-title">Q/K 归一化</text>
+
+    <rect x="210" y="444" width="154" height="86" rx="15" fill="#f5f7fa" stroke="#cbd5e1" stroke-width="2"/>
+    <text x="287" y="479" text-anchor="middle" class="node-title">Q、K</text>
+    <text x="287" y="506" text-anchor="middle" class="node-sub">查询与键向量</text>
+    <line x1="366" y1="487" x2="391" y2="487" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="400" y="444" width="170" height="86" rx="15" fill="#dff3ee" stroke="#70b8a7" stroke-width="2"/>
+    <text x="485" y="478" text-anchor="middle" class="node-title">LayerNorm(Q/K)</text>
+    <text x="485" y="506" text-anchor="middle" class="node-sub">控制向量数值范围</text>
+    <line x1="572" y1="487" x2="597" y2="487" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="606" y="444" width="170" height="86" rx="15" fill="#edf4ff" stroke="#a9c5ef" stroke-width="2"/>
+    <text x="691" y="479" text-anchor="middle" class="node-title">缩放点积</text>
+    <text x="691" y="506" text-anchor="middle" class="node-sub">QKᵀ / √dₖ</text>
+    <line x1="778" y1="487" x2="803" y2="487" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="812" y="444" width="170" height="86" rx="15" fill="#f5f7fa" stroke="#cbd5e1" stroke-width="2"/>
+    <text x="897" y="479" text-anchor="middle" class="node-title">logits</text>
+    <text x="897" y="506" text-anchor="middle" class="node-sub">由归一化后的 Q/K 计算</text>
+    <line x1="984" y1="487" x2="1009" y2="487" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="1018" y="444" width="150" height="86" rx="15" fill="#edf4ff" stroke="#a9c5ef" stroke-width="2"/>
+    <text x="1093" y="479" text-anchor="middle" class="node-title">Softmax</text>
+    <text x="1093" y="506" text-anchor="middle" class="node-sub">生成权重</text>
+    <line x1="1170" y1="487" x2="1195" y2="487" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="1204" y="444" width="170" height="86" rx="15" fill="#e8f5f2" stroke="#9ccfc3" stroke-width="2"/>
+    <text x="1289" y="479" text-anchor="middle" class="node-title">注意力权重</text>
+    <text x="1289" y="506" text-anchor="middle" class="node-sub">用于加权 V</text>
+  </g>
+
+  <g>
+    <rect x="36" y="600" width="1368" height="184" rx="20" fill="#ffffff" stroke="#d7e0ed"/>
+    <rect x="52" y="662" width="142" height="54" rx="14" fill="#fff0df"/>
+    <text x="123" y="695" text-anchor="middle" class="row-title">logit 软截断</text>
+
+    <rect x="210" y="642" width="154" height="86" rx="15" fill="#f5f7fa" stroke="#cbd5e1" stroke-width="2"/>
+    <text x="287" y="677" text-anchor="middle" class="node-title">Q、K</text>
+    <text x="287" y="704" text-anchor="middle" class="node-sub">原始向量</text>
+    <line x1="366" y1="685" x2="391" y2="685" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="400" y="642" width="170" height="86" rx="15" fill="#f5f7fa" stroke="#cbd5e1" stroke-width="2"/>
+    <text x="485" y="677" text-anchor="middle" class="node-title">直接计算</text>
+    <text x="485" y="704" text-anchor="middle" class="node-sub">不做 Q/K 归一化</text>
+    <line x1="572" y1="685" x2="597" y2="685" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="606" y="642" width="170" height="86" rx="15" fill="#edf4ff" stroke="#a9c5ef" stroke-width="2"/>
+    <text x="691" y="677" text-anchor="middle" class="node-title">缩放点积</text>
+    <text x="691" y="704" text-anchor="middle" class="node-sub">QKᵀ / √dₖ</text>
+    <line x1="778" y1="685" x2="803" y2="685" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="812" y="642" width="170" height="86" rx="15" fill="#fff0df" stroke="#e6a653" stroke-width="2"/>
+    <text x="897" y="674" text-anchor="middle" class="node-title">tanh 软截断</text>
+    <text x="897" y="699" text-anchor="middle" class="node-sub">cap · tanh(logits/cap)</text>
+    <text x="897" y="719" text-anchor="middle" class="node-sub">范围：(-cap, cap)</text>
+    <line x1="984" y1="685" x2="1009" y2="685" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="1018" y="642" width="150" height="86" rx="15" fill="#edf4ff" stroke="#a9c5ef" stroke-width="2"/>
+    <text x="1093" y="677" text-anchor="middle" class="node-title">Softmax</text>
+    <text x="1093" y="704" text-anchor="middle" class="node-sub">生成权重</text>
+    <line x1="1170" y1="685" x2="1195" y2="685" stroke="#64748b" stroke-width="3" marker-end="url(#arrow)"/>
+
+    <rect x="1204" y="642" width="170" height="86" rx="15" fill="#e8f5f2" stroke="#9ccfc3" stroke-width="2"/>
+    <text x="1289" y="677" text-anchor="middle" class="node-title">注意力权重</text>
+    <text x="1289" y="704" text-anchor="middle" class="node-sub">用于加权 V</text>
+  </g>
+
+  <rect x="210" y="812" width="1164" height="70" rx="17" fill="#172b4d"/>
+  <text x="792" y="855" text-anchor="middle" class="equation" fill="#ffffff" style="fill:#ffffff">注意力输出 = Softmax（稳定化后的 logits） × V</text>
+  <text x="58" y="913" class="small">原创重绘：根据本章 4.4.2–4.4.3 内容整理；绿色标出 Q/K 归一化，橙色标出 Softmax 前的 logits 软截断。</text>
+</svg>
+
