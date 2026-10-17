@@ -34,6 +34,16 @@ lm-eval run --model hf --model_args pretrained=Qwen/Qwen2.5-0.5B,dtype=float32 -
 
 实际模型命令需要下载模型权重；正式比较应固定模型 revision、运行环境、样本范围和 few-shot 设置，并使用完整且有标签的评测集。
 
+## 样例结果
+
+在 Python 3.12、lm-eval 0.4.13、datasets 5.1.0 下运行固定随机种子的 5 条零样本 smoke test：
+
+| 任务 | 模型 | 样本数 | acc | acc stderr | acc_norm | acc_norm stderr |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| M3KE 高中语文 dev | lm-eval `dummy` 随机基线 | 5 | 0.2000 | 0.2000 | 0.2000 | 0.2000 |
+
+这组分数只表示任务可加载、选项似然可计算、指标可汇总；随机模型和 5 条样本都不能用于模型能力比较。可复现元数据见 [sample_results.json](./sample_results.json)。
+
 ## 来源与引用
 
 - M3KE 官方仓库：https://github.com/tjunlp-lab/M3KE
