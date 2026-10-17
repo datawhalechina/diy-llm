@@ -1,5 +1,7 @@
 # Assignment1
 
+> 常见问题与排错请参阅[作业 FAQ](../FAQ.md)。
+
 基于`PyTorch`实现的mini Transformer语言模型，支持从零训练和文本生成。
 
 ## 环境要求
