@@ -21,7 +21,7 @@
 当我们打开游戏里面的3D模型，可以发现3D模型都是由一个一个**小三角形**构成，三角形由三根线构成，为了节省存储的空间，我们只存储三角形的三个顶点坐标，构成线的像素点坐标我们不储存，而是实时计算出来。
 
 <div align="center">
-  <img src="images/6-0-3D模型和三角形的计算.png" alt="3D模型和三角形的计算" width="800">
+  <img src="./images/6-0-3D模型和三角形的计算.png" alt="3D模型和三角形的计算" width="800">
   <p><em>图 1. 3D模型和三角形的计算</em></p>
 </div>
 
@@ -40,7 +40,7 @@ CPU设计初衷是用来最小化单任务延迟，快速响应复杂逻辑，�
 GPU的设计初衷是最大化数据吞吐量，批量处理简单计算，大部分晶体管用于算术逻辑单元（ALU），核心多而简，可以达到数万个。优化**延迟**，追求单个任务最快完成。配备大型控制单元、分支预测器，核心数量少（4-32个）但时钟频率极高。
 
 <div align="center">
-  <img src="images/6-1-GPU和CPU的结构.png" alt="GPU和CPU的结构" width="800">
+  <img src="./images/6-1-GPU和CPU的结构.png" alt="GPU和CPU的结构" width="800">
   <p><em>图 2. GPU和CPU的结构</em></p>
 </div>
 
@@ -105,7 +105,7 @@ GeForce 256具有革命性，**硬件T&L技术**上，将把**3D**图形的坐�
 ### 2.3 A100显卡核心的构成
 
 <div align="center">
-  <img src="images/6-2-GPU的结构.png" alt="GPU的结构" width="800">
+  <img src="./images/6-2-GPU的结构.png" alt="GPU的结构" width="800">
   <p><em>图 3. GPU的结构</em></p>
 </div>
 
@@ -139,7 +139,7 @@ GA100 是完整芯片的物理设计，实际产品会和白皮书中存在差�
 Ampere架构拓扑如下：
 
 <div align="center">
-  <img src="images/6-3-GPU核心的架构.png" alt="GPU核心的架构" width="800">
+  <img src="./images/6-3-GPU核心的架构.png" alt="GPU核心的架构" width="800">
   <p><em>图 4. GPU核心的架构</em></p>
 </div>
 
@@ -162,7 +162,7 @@ A100的SM是Ampere架构核心，相比消费级GPU有本质增强：
 SM是将线程块（Thread Block）映射到物理硬件并完成实际计算的根本单元。当GPU内核（Kernel）启动时，线程块被分配到空闲的SM上，SM负责将其内部的线程束（Warp，32线程）解码并派发至CUDA核心（处理通用运算）或Tensor Core（处理矩阵乘加运算）执行。没有SM的调度，CUDA核心和Tensor Core无法自主运行。
 
 <div align="center">
-  <img src="images/6-4-SM的架构.png" alt="SM的架构" width="800">
+  <img src="./images/6-4-SM的架构.png" alt="SM的架构" width="800">
   <p><em>图 5. SM的架构</em></p>
 </div>
 
@@ -233,14 +233,14 @@ SM内置**192KB的L1缓存/共享内存**，供本SM内所有CUDA核心快速存
 ### 3.2 执行模型的核心名词详解
 
 <div align="center">
-  <img src="images/6-5-SM的执行.png" alt="SM的执行" width="800">
+  <img src="./images/6-5-SM的执行.png" alt="SM的执行" width="800">
   <p><em>图 6. SM的执行</em></p>
 </div>
 
 在GPU运行中，我们划分三个粒度层级来思考：**块（block）、线程束（warp）和线程（thread）**，这是粒度逐级细化的顺序。块是大型线程组，**每个块会被分配给一个SM处理**。可以把每个SM想象成**独立工作**的单元，而块就是分配给它的**处理单元**。在每个块内部包含**大量线程**，每个线程代表待执行的任务单元。这些线程在执行时会分组运行，这种分组称为线程束。每个线程束由32个连续编号的线程组成，从块中提取出来同步执行。通过这个示意图可以看到：多个块被分配给不同的SM，每个块内包含多个线程束，每个线程束又由大量线程组成。所有这些线程都会在不同数据上执行相同的指令，这就是基本执行模型。
 
 <div align="center">
-  <img src="images/6-28-内存模型.png" alt="内存模型" width="800">
+  <img src="./images/6-28-内存模型.png" alt="内存模型" width="800">
   <p><em>图 7. 内存模型</em></p>
 </div>
 
@@ -271,7 +271,7 @@ SIMT是SM（流式多处理器）**执行指令的根本方式**。当GPU内核�
 ## 4 GPU的内存模型
 
 <div align="center">
-  <img src="images/6-6-GPU的内存模型.png" alt="GPU的内存模型" width="800">
+  <img src="./images/6-6-GPU的内存模型.png" alt="GPU的内存模型" width="800">
   <p><em>图 8. GPU的内存模型</em></p>
 </div>
 
@@ -383,7 +383,7 @@ L1**速度比L2快**，是GPU性能优化的核心；**灵活性**高，程序�
 **TPU**是Google自2015年起自主研发的ASIC芯片（专用集成电路），专为神经网络计算而生。如果说GPU是"图形计算王者转职AI"，那TPU就是"生来只为AI"的纯粹战士。TPU从电路设计第一天起，只干一件事：那就是加速张量（Tensor）运算。
 
 <div align="center">
-  <img src="images/6-7-TPU的抽象模型.png" alt="TPU的抽象模型" width="800">
+  <img src="./images/6-7-TPU的抽象模型.png" alt="TPU的抽象模型" width="800">
   <p><em>图 9. TPU的抽象模型</em></p>
 </div>
 
@@ -406,7 +406,7 @@ GPU之所以如此成功，关键在于其卓越的**可扩展性**。只需增�
 ### 6.1 我们希望矩阵运算又快又好
 
 <div align="center">
-  <img src="images/6-8-矩阵运算在各个设备的速度.png" alt="矩阵运算在各个设备的速度" width="800">
+  <img src="./images/6-8-矩阵运算在各个设备的速度.png" alt="矩阵运算在各个设备的速度" width="800">
   <p><em>图 10. 矩阵运算在各个设备的速度</em></p>
 </div>
 
@@ -415,7 +415,7 @@ GPU之所以如此成功，关键在于其卓越的**可扩展性**。只需增�
 ### 6.2 计算与内存扩展不平衡
 
 <div align="center">
-  <img src="images/6-9-计算速度扩展的比内存扩展速度更快.png" alt="计算速度扩展的比内存扩展速度更快" width="800">
+  <img src="./images/6-9-计算速度扩展的比内存扩展速度更快.png" alt="计算速度扩展的比内存扩展速度更快" width="800">
   <p><em>图 11. 计算速度扩展的比内存扩展速度更快</em></p>
 </div>
 
@@ -424,7 +424,7 @@ GPU之所以如此成功，关键在于其卓越的**可扩展性**。只需增�
 但是其中的**核心矛盾**还没有解决---**内存扩展速度远低于计算扩展**。计算性能（灰线）是10万倍提升；内存带宽（绿线）大约100倍提升（GDDR-HBM2E）；互联带宽（蓝线）增长最缓慢。
 
 <div align="center">
-  <img src="images/6-10-屋顶线模型.png" alt="屋顶线模型" width="800">
+  <img src="./images/6-10-屋顶线模型.png" alt="屋顶线模型" width="800">
   <p><em>图 12. 屋顶线模型</em></p>
 </div>
 
@@ -477,7 +477,7 @@ GPU采用SIMT（单指令多线程）执行架构，**同一线程束（Warp）�
 **精度提升GPU速度**的本质是用**精度**换取更快的**计算**和"省得多"的**带宽**。这背后是硬件电路简化、存储数据量减少、专用加速单元三重优化叠加。最明显的是计算数据和权重等所有元素的比特数减少时，需要移动的比特量就会大幅降低。即便从全局内存访问这些比特，其影响也会变得微乎其微。
 
 <div align="center">
-  <img src="images/6-11-低精度提升速度.png" alt="低精度提升速度" width="800">
+  <img src="./images/6-11-低精度提升速度.png" alt="低精度提升速度" width="800">
   <p><em>图 13. 低精度提升速度</em></p>
 </div>
 
@@ -540,7 +540,7 @@ Tensor Core是NVIDIA为低精度矩阵乘设计的**专用电路**，它不是�
 ---
 
 <div align="center">
-  <img src="images/6-12-张量核心可进行的操作.png" alt="张量核心可进行的操作" width="800">
+  <img src="./images/6-12-张量核心可进行的操作.png" alt="张量核心可进行的操作" width="800">
   <p><em>图 14. 张量核心可进行的操作</em></p>
 </div>
 
@@ -551,7 +551,7 @@ Tensor Core是NVIDIA为低精度矩阵乘设计的**专用电路**，它不是�
 算子融合通过**消除中间结果内存读写和减少Kernel启动开销**，实现2-5倍速度提升。
 
 <div align="center">
-  <img src="images/6-13-算子融合演示.png" alt="算子融合演示" width="800">
+  <img src="./images/6-13-算子融合演示.png" alt="算子融合演示" width="800">
   <p><em>图 15. 算子融合演示</em></p>
 </div>
 
@@ -564,7 +564,7 @@ Tensor Core是NVIDIA为低精度矩阵乘设计的**专用电路**，它不是�
 这其实就是**融合核函数**的思维模型，当一系列运算需要按顺序处理同一数据时，与其每次都将中间结果写回存储，不如尽可能在单个计算单元完成所有操作，直到**必须传回内存时才进行传输**。这就是**核融合的核心思想**。
 
 <div align="center">
-  <img src="images/6-14-算子融合示例.png" alt="算子融合示例" width="800">
+  <img src="./images/6-14-算子融合示例.png" alt="算子融合示例" width="800">
   <p><em>图 16. 算子融合示例</em></p>
 </div>
 
@@ -579,7 +579,7 @@ Tensor Core是NVIDIA为低精度矩阵乘设计的**专用电路**，它不是�
 **重计算的核心思想是通过增加计算量来避免内存访问。**
 
 <div align="center">
-  <img src="images/6-15-反向传播算法.png" alt="反向传播算法" width="800">
+  <img src="./images/6-15-反向传播算法.png" alt="反向传播算法" width="800">
   <p><em>图 17. 反向传播算法</em></p>
 </div>
 
@@ -588,7 +588,7 @@ Tensor Core是NVIDIA为低精度矩阵乘设计的**专用电路**，它不是�
 从机制上来说，这个过程是必然发生的。但这可能会导致海量的内存输入输出操作。但是能够避免这种情况。
 
 <div align="center">
-  <img src="images/6-16-三个sigmoid函数堆叠.png" alt="三个sigmoid函数堆叠" width="800">
+  <img src="./images/6-16-三个sigmoid函数堆叠.png" alt="三个sigmoid函数堆叠" width="800">
   <p><em>图 18. 三个sigmoid函数堆叠</em></p>
 </div>
 
@@ -605,7 +605,7 @@ Tensor Core是NVIDIA为低精度矩阵乘设计的**专用电路**，它不是�
 GPU中的**慢速内存**（即全局内存/DRAM）实际上极其缓慢。为了**提升速度，硬件层面会进行特定优化**。
 
 <div align="center">
-  <img src="images/6-17-突发模式.png" alt="突发模式" width="800">
+  <img src="./images/6-17-突发模式.png" alt="突发模式" width="800">
   <p><em>图 19. 突发模式</em></p>
 </div>
 
@@ -614,14 +614,14 @@ GPU中的**慢速内存**（即全局内存/DRAM）实际上极其缓慢。为�
 每个地址空间都被划分为突发段，系统会直接返回整个突发段而非仅目标数据。当寻址内存时，数据传输到放大器是最耗时的步骤。而突发段作用是**一旦完成这个步骤，就能免费获取大量字节数据**。突发段设计正是为了优化耗时的数据迁移过程。**如果内存访问模式得当，就能显著加速内存访问**。比如要读取整个数据块，若采用随机访问，需要执行与查询长度相当的次数；但若先读取首值，就能立即获取整个突发段；接着读取第4个值，又能立即获得第二个突发段。**通过精心设计内存访问策略，仅从每个突发段提取所需数据，理论上可实现四倍吞吐量**，这就是内存合并技术。
 
 <div align="center">
-  <img src="images/6-18-合并同一个线程块中的内存访问.png" alt="合并同一个线程块中的内存访问" width="800">
+  <img src="./images/6-18-合并同一个线程块中的内存访问.png" alt="合并同一个线程块中的内存访问" width="800">
   <p><em>图 20. 合并同一个线程块中的内存访问</em></p>
 </div>
 
 当线程束中的**所有线程都位于同一突发段**时，智能硬件和编程模型会将这些查询聚合**不再分别查询0123**，而是通过单次查询0即可从突发模式DRAM中同时读取所有四个值。**注意线程束包含32个有序线程**，这些线程的内存访问是同步进行的。通过优化可以一次性获取全部4字节数据，使**内存吞吐量提升四倍**。
 
 <div align="center">
-  <img src="images/6-19-矩阵乘法的合并.png" alt="矩阵乘法的合并" width="800">
+  <img src="./images/6-19-矩阵乘法的合并.png" alt="矩阵乘法的合并" width="800">
   <p><em>图 21. 矩阵乘法的合并</em></p>
 </div>
 
@@ -643,7 +643,7 @@ GPU中的**慢速内存**（即全局内存/DRAM）实际上极其缓慢。为�
 **分块的核心思想是通过分组内存访问来减少全局内存的访问量**。
 
 <div align="center">
-  <img src="images/6-20-矩阵乘法分块.png" alt="矩阵乘法分块" width="800">
+  <img src="./images/6-20-矩阵乘法分块.png" alt="矩阵乘法分块" width="800">
   <p><em>图 22. 矩阵乘法分块</em></p>
 </div>
 
@@ -654,7 +654,7 @@ GPU中的**慢速内存**（即全局内存/DRAM）实际上极其缓慢。为�
 问题在于能否避免过多的全局内存读写，理想方案是用一段时间将数据块从全局内存加载到高速的共享内存，在共享内存中完成大量计算，最后再处理下一数据块。这样能最小化全局内存访问。
 
 <div align="center">
-  <img src="images/6-21-矩阵乘法分块（Tiling）化.png" alt="矩阵乘法分块（Tiling）化" width="800">
+  <img src="./images/6-21-矩阵乘法分块（Tiling）化.png" alt="矩阵乘法分块（Tiling）化" width="800">
   <p><em>图 23. 矩阵乘法分块（Tiling）化</em></p>
 </div>
 
@@ -663,14 +663,14 @@ GPU中的**慢速内存**（即全局内存/DRAM）实际上极其缓慢。为�
 另一个优势是由于加载的是**完整数据块**，我们可以**按任意顺序（例如列优先或行优先）遍历这些子矩阵**，从而在从全局内存加载数据块到共享内存时实现**内存访问的合并**。采用分块访问策略能带来全方位的性能提升。
 
 <div align="center">
-  <img src="images/6-22-矩阵乘法分块的数学分析.png" alt="矩阵乘法分块的数学分析" width="800">
+  <img src="./images/6-22-矩阵乘法分块的数学分析.png" alt="矩阵乘法分块的数学分析" width="800">
   <p><em>图 24. 矩阵乘法分块的数学分析</em></p>
 </div>
 
 现在我们可以进行分块计算的数学分析。假设有矩阵 $A$ 、 $B$ 和 $C$，这三个 $N×N$ 的方阵，数据块尺寸为 $T$ 。对于N×N矩阵乘法，若采用非分块方式逐行逐列计算，每个输入元素每次处理时都需要从**全局内存读取**，即每个元素会被读取 $N$ 次。而采用分块计算时，全局内存读取以**数据块**为单位进行，每个输入元素从全局内存读取次数降为 $N/T$ 次，同时在每个数据块内部进行 $T$ 次读取。虽**然矩阵乘法运算的总读取次数无法减少，但通过将读取操作转移到高速共享内存，我们实现了 $T$ 次共享内存读取与 $N/T$ 次全局内存读取的配合。当共享内存能存储较大数据块时，这将使全局内存数据读取量减少 $T$ 倍**。
 
 <div align="center">
-  <img src="images/6-23-分块（Tiling）分块的复杂性.png" alt="分块（Tiling）分块的复杂性" width="800">
+  <img src="./images/6-23-分块（Tiling）分块的复杂性.png" alt="分块（Tiling）分块的复杂性" width="800">
   <p><em>图 25. 分块（Tiling）分块的复杂性</em></p>
 </div>
 
@@ -687,7 +687,7 @@ GPU中的**慢速内存**（即全局内存/DRAM）实际上极其缓慢。为�
 ## 8 Flash Attention
 
 <div align="center">
-  <img src="images/6-31-标准注意力计算开销.png" alt="FlashAttention V1原理图" width="800">
+  <img src="./images/6-31-标准注意力计算开销.png" alt="FlashAttention V1原理图" width="800">
   <p><em>图 26. FlashAttention V1原理图</em></p>
 </div>
 
@@ -698,7 +698,7 @@ FlashAttention并不改变Attention的渐进计算复杂度（FLOPs仍为 $O(N^2
 > FlashAttention在数学上与标准attention等价（除浮点误差外），属于精确重排而非近似计算。**这里可以通过运行 [FlashAttention.ipynb](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/zh/chapter6/Flashattention.ipynb)，对比一下FlashAttention和标准Attention的计算结果差异。**
 
 <div align="center">
-  <img src="images/6-32-FlashAttention计算示意.png" alt="左图：前向传播+反向传播的运行时间；右图：注意力内存使用情况。" width="800">
+  <img src="./images/6-32-FlashAttention计算示意.png" alt="左图：前向传播+反向传播的运行时间；右图：注意力内存使用情况。" width="800">
   <p><em>图 27. 左图：前向传播+反向传播的运行时间；右图：注意力内存使用情况。</em></p>
 </div>
 
@@ -937,14 +937,14 @@ FlashAttention V3是算法与硬件深度协同设计的典范。它通过**异�
 ## 9 PagedAttention
 
 <div align="center">
-  <img src="images/6-33-分页注意力内存布局.png" alt="传统KV Cache分布" width="800">
+  <img src="./images/6-33-分页注意力内存布局.png" alt="传统KV Cache分布" width="800">
   <p><em>图 28. 传统KV Cache分布</em></p>
 </div>
 
 **在传统的KV Cache管理方式中，通常为每个请求序列预先分配一段逻辑上连续的缓存空间，用于存储其历史生成的Key/Value状态**。然而，由于实际生成长度难以精确预测，这种静态预分配策略会带来显存利用率问题。当预留空间大于实际生成长度时，会产生`内部碎片`（internal fragmentation），即已分配但未被使用的显存空间；同时，由于不同请求的生命周期不一致，释放时间存在差异，显存中可能形成多个零散的空闲块，这个时候尽管总空闲容量充足，但由于无法提供足够大的连续缓存块来满足新序列的分配需求，从而产生`外部碎片`（external fragmentation）。
 
 <div align="center">
-  <img src="images/6-34-分页注意力逻辑块与物理块.png" alt="显存占用分析" width="800">
+  <img src="./images/6-34-分页注意力逻辑块与物理块.png" alt="显存占用分析" width="800">
   <p><em>图 29. 显存占用分析</em></p>
 </div>
 
@@ -1140,14 +1140,14 @@ PagedAttention 将显存管理从**以请求为单位的静态圈地转变为以
 昇腾910B实测数据：
 
 <div align="center">
-  <img src="images/6-29-昇腾910B实测数据.png" alt="昇腾910B实测数据" width="800">
+  <img src="./images/6-29-昇腾910B实测数据.png" alt="昇腾910B实测数据" width="800">
   <p><em>图 30. 昇腾910B实测数据</em></p>
 </div>
 
 英伟达A100实测数据：
 
 <div align="center">
-  <img src="images/6-30-英伟达A100实测数据.png" alt="英伟达A100实测数据" width="800">
+  <img src="./images/6-30-英伟达A100实测数据.png" alt="英伟达A100实测数据" width="800">
   <p><em>图 31. 英伟达A100实测数据</em></p>
 </div>
 
