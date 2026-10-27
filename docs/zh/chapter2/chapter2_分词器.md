@@ -25,7 +25,7 @@
 > 一句话总结——**LLM负责“理解和生成”，而tokenizer负责“把语言变成模型能理解、可复用的结构”。**
 
 <div align="center">
-  <img src="images/2-1-分词器与LLM.png" alt="分词器与LLM" width="800">
+  <img src="./images/2-1-分词器与LLM.png" alt="分词器与LLM" width="800">
   <p><em>图 1. 分词器与LLM</em></p>
 </div>
 
@@ -62,7 +62,7 @@
 ```
 
 <div align="center">
-  <img src="images/2-2-分词器训练流程.png" alt="分词器训练流程" width="800">
+  <img src="./images/2-2-分词器训练流程.png" alt="分词器训练流程" width="800">
   <p><em>图 2. 分词器训练流程</em></p>
 </div>
 
@@ -201,7 +201,7 @@ if __name__ == "__main__":
 *Tips：词汇表外是当LLM模型在处理新的、实际应用的文本时，如果遇到一个词汇表中没有的Token，那么这个Token就被视为一个OOV。*
 
 <div align="center">
-  <img src="images/2-3-词元序列长度与注意力计算.png" alt="token序列长度对注意力机制的影响" width="800">
+  <img src="./images/2-3-词元序列长度与注意力计算.png" alt="token序列长度对注意力机制的影响" width="800">
   <p><em>图 3. token序列长度对注意力机制的影响</em></p>
 </div>
 
@@ -317,7 +317,7 @@ $$
 **Step1** &emsp;导出核心产物，不管是使用哪一种分词算法，训练完成后都需要导出至少两个关键文件：
 
 <div align="center">
-  <img src="images/2-4-词表与合并规则文件.png" alt="vocab、merges文件示例" width="800">
+  <img src="./images/2-4-词表与合并规则文件.png" alt="vocab、merges文件示例" width="800">
   <p><em>图 4. vocab、merges文件示例</em></p>
 </div>
 
@@ -545,7 +545,7 @@ print(f"IDs:{encoded_ids}")
 ### 4.3 快速体验DeepSeek分词器
 
 <div align="center">
-  <img src="images/2-5-DeepSeek分词器可视化.png" alt="DeepSeek分词器" width="800">
+  <img src="./images/2-5-DeepSeek分词器可视化.png" alt="DeepSeek分词器" width="800">
   <p><em>图 5. DeepSeek分词器</em></p>
 </div>
 
