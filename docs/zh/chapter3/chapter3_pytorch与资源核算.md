@@ -38,7 +38,7 @@ $$6 \times (70 \times 10^9) \times (15 \times 10^{12}) \approx 6.3 \times 10^{24
 查阅 [NVIDIA H100 的白皮书](https://www.nvidia.com/en-sg/data-center/h100/)，其 FP16/BF16 的峰值算力约为 **1979 TFLOPS**（每秒万亿次浮点运算）。
 
 <div align="center">
-  <img src="images/3-1-H100数值细览.png" alt="H100 数值细览" width="800">
+  <img src="./images/3-1-H100数值细览.png" alt="H100 数值细览" width="800">
   <p><em>图 1. H100 数值细览</em></p>
 </div>
 
