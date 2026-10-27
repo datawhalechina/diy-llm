@@ -1,4 +1,4 @@
-# 第 3 章 pytorch与资源核算
+# 第 3 章 pytorch 与资源核算
 
 第二章中我们讨论了分词（Tokenization）。本节课我们将深入**模型训练的机制**。我们不会直接讲解 Transformer 架构（那是下节课的内容），而是通过构建简单的线性模型，掌握训练任何深度学习模型都通用的“原语”（Primitives）。
 
@@ -45,19 +45,19 @@ $$6 \times (70 \times 10^9) \times (15 \times 10^{12}) \approx 6.3 \times 10^{24
 但是要注意，这个值是 NVIDIA H100 GPU 在使用 FP16 或 BF16 数据类型、且启用结构化稀疏（Structured Sparsity）时可达到的理论最大计算吞吐量。对于我们训练普通的稠密模型（如标准的 LLaMA-1到LLaMA-3系列、Qwen3-0.6B/1.7B/4B/8B/14B/32B等），理论峰值减半，约 990 TFLOPS。
 
 <!-- <div align="center">
-  <img src="images/3-2-H100性能明细.png" alt="H100 性能明细" width="800">
+  <img src="./images/3-2-H100性能明细.png" alt="H100 性能明细" width="800">
   <p><em>图 2. H100 性能明细</em></p>
 </div> -->
 
 <div align="center">
-  <img src="images/3-2-H100性能明细.png" alt="H100 性能明细" width="800">
+  <img src="./images/3-2-H100性能明细.png" alt="H100 性能明细" width="800">
   <p><em>图 2. H100 性能明细</em></p>
 </div>
 
 > 结构化稀疏，是一种模型压缩的方法，通常是对稠密模型按照50%的稀疏度进行剪枝（稀疏形式为n:m，即m个连续权重里必须剪掉n个，类型有 2:4、4:8、8:16)。还有一种灵活度更高的非结构化剪枝方法，可以按照百分比进行剪枝，但通常相对于结构化剪枝性能更差。
 
 <div align="center">
-  <img src="images/3-3-剪枝方法介绍.png" alt="剪枝方法介绍" width="800">
+  <img src="./images/3-3-剪枝方法介绍.png" alt="剪枝方法介绍" width="800">
   <p><em>图 3. 剪枝方法介绍</em></p>
 </div>
 
@@ -269,7 +269,7 @@ assert y.size() == torch.Size([16, 2])
 在实际应用中，我们很少只处理单个数据样本。为了提高效率，我们会将多个样本打包成一个“批次”（batch），并对整个批次同时进行计算。下图展示了批量处理的操作：
 
 <div align="center">
-  <img src="images/3-4-矩阵乘法.png" alt="矩阵乘法" width="800">
+  <img src="./images/3-4-矩阵乘法.png" alt="矩阵乘法" width="800">
   <p><em>图 4. 矩阵乘法</em></p>
 </div>
 
@@ -421,7 +421,7 @@ x = rearrange(x, "... heads hidden2 -> ... (heads hidden2)")
 1. Float32 (FP32 / 单精度浮点数)
 
 <div align="center">
-  <img src="images/3-5-fp32.png" alt="单精度浮点数" width="800">
+  <img src="./images/3-5-fp32.png" alt="单精度浮点数" width="800">
   <p><em>图 5. 单精度浮点数</em></p>
 </div>
 
@@ -436,7 +436,7 @@ x = rearrange(x, "... heads hidden2 -> ... (heads hidden2)")
 2. Float16 (FP16 / 半精度浮点数)
 
 <div align="center">
-  <img src="images/3-6-fp16.png" alt="半精度浮点数" width="800">
+  <img src="./images/3-6-fp16.png" alt="半精度浮点数" width="800">
   <p><em>图 6. 半精度浮点数</em></p>
 </div>
 
@@ -452,7 +452,7 @@ x = rearrange(x, "... heads hidden2 -> ... (heads hidden2)")
 3. BFloat16 (BF16 / Brain Floating Point)
 
 <div align="center">
-  <img src="images/3-7-bf16.png" alt="BF16" width="800">
+  <img src="./images/3-7-bf16.png" alt="BF16" width="800">
   <p><em>图 7. BF16</em></p>
 </div>
 
@@ -474,7 +474,7 @@ Percy 在课上解释说："bf16 牺牲了精度来换取范围。对于深度�
 4. FP8 (8位浮点数)
 
 <div align="center">
-  <img src="images/3-8-fp8.png" alt="8位浮点数" width="800">
+  <img src="./images/3-8-fp8.png" alt="8位浮点数" width="800">
   <p><em>图 8. 8位浮点数</em></p>
 </div>
 
@@ -534,7 +534,7 @@ x = torch.tensor([
 张量在底层可以是按行存储也可以是按列存储。Numpy 和 Pytorch 都采用了**按行存储**的方式，任何维度的张量在底层存储都占据着内存中连续的空间，那么问题来了，我们如何访问到我们想要的位置的数据？
 
 <div align="center">
-  <img src="images/3-9-tensor-memory.png" alt="张量内存" width="800">
+  <img src="./images/3-9-tensor-memory.png" alt="张量内存" width="800">
   <p><em>图 9. 张量内存</em></p>
 </div>
 
@@ -574,7 +574,7 @@ assert x.device == torch.device("cpu")
 但是，为了利用 GPU 的大规模并行性计加速计算，我们需要将它们移至 GPU 内存中。
 
 <div align="center">
-  <img src="images/3-10-cpu与gpu之间的通信.png" alt="CPU与GPU之间的通信" width="800">
+  <img src="./images/3-10-cpu与gpu之间的通信.png" alt="CPU与GPU之间的通信" width="800">
   <p><em>图 10. CPU与GPU之间的通信</em></p>
 </div>
 
@@ -863,11 +863,11 @@ $$
 将这个过程[可视化](https://medium.com/@dzmitrybahdanau/the-flops-calculus-of-language-model-training-3b19c1f025e4)：
 
 <div align="center">
-  <img src="images/3-13-反向梯度传播.png" alt="反向梯度传播" width="800">
+  <img src="./images/3-13-反向梯度传播.png" alt="反向梯度传播" width="800">
   <p><em>图 11. 反向梯度传播</em></p>
 </div>
 <div align="center">
-  <img src="images/3-13-反向梯度传播.png" alt="反向梯度传播" width="800">
+  <img src="./images/3-13-反向梯度传播.png" alt="反向梯度传播" width="800">
   <p><em>图 12. 反向梯度传播</em></p>
 </div>
 
@@ -1406,7 +1406,7 @@ with torch.amp.autocast("cuda", dtype=torch.bfloat16):
 ### 7.1 计算不是只有"算"
 
 <div align="center">
-  <img src="images/3-12-compute-memory.png" alt="计算与内存" width="800">
+  <img src="./images/3-12-compute-memory.png" alt="计算与内存" width="800">
   <p><em>图 13. 计算与内存</em></p>
 </div>
 
@@ -1488,7 +1488,7 @@ Percy 带领大家逐一分析了几个常见操作的算术强度：
 ### 7.5 Roofline 图
 
 <div align="center">
-  <img src="images/3-13-Roofline分析.png" alt="Roofline 分析" width="800">
+  <img src="./images/3-13-Roofline分析.png" alt="Roofline 分析" width="800">
   <p><em>图 14. Roofline 分析</em></p>
 </div>
 
