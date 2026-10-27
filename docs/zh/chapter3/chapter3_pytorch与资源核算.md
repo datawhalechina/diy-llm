@@ -863,12 +863,8 @@ $$
 将这个过程[可视化](https://medium.com/@dzmitrybahdanau/the-flops-calculus-of-language-model-training-3b19c1f025e4)：
 
 <div align="center">
-  <img src="./images/3-13-反向梯度传播.png" alt="反向梯度传播" width="800">
+  <img src="./images/3-11-反向梯度传播.png" alt="反向梯度传播" width="800">
   <p><em>图 11. 反向梯度传播</em></p>
-</div>
-<div align="center">
-  <img src="./images/3-13-反向梯度传播.png" alt="反向梯度传播" width="800">
-  <p><em>图 12. 反向梯度传播</em></p>
 </div>
 
 - 对于 w2：计算 w2.grad 和 h1.grad 总共需要 4 * B * D * K 次 FLOPs。
@@ -1407,7 +1403,7 @@ with torch.amp.autocast("cuda", dtype=torch.bfloat16):
 
 <div align="center">
   <img src="./images/3-12-compute-memory.png" alt="计算与内存" width="800">
-  <p><em>图 13. 计算与内存</em></p>
+  <p><em>图 12. 计算与内存</em></p>
 </div>
 
 Percy 画了一张卡通图来简化 GPU 的工作模型：
