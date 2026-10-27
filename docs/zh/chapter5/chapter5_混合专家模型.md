@@ -1,6 +1,6 @@
 # 第 5 章 注意力的改进方案
 
-Transformer 逐渐成为现代大语言模型的核心机制。但随着参数规模与上下文窗口持续扩展，原始 Transformer 架构在计算复杂度、显存开销和模型容量上的瓶颈日益突出。为此，近年研究主要围绕两条路线展开：
+自 2017 年《Attention Is All You Need》提出以来，Transformer 逐渐成为现代大语言模型的核心机制。但随着参数规模与上下文窗口持续扩展，原始 Transformer 架构在计算复杂度、显存开销和模型容量上的瓶颈日益突出。为此，近年研究主要围绕两条路线展开：
 
 - **扩展上下文处理能力**：在有限资源下高效处理更长序列。代表工作包括：[FlashAttention 优化 Attention Kernel 提升 GPU 利用率、PagedAttention 改进 KV Cache 内存管理](https://datawhalechina.github.io/diy-llm/chapter6/chapter6_%E7%AC%AC%E5%85%AD%E7%AB%A0GPU%E5%92%8CGPU%E7%9B%B8%E5%85%B3%E7%9A%84%E4%BC%98%E5%8C%96.html)、MLA压缩 Key-Value 表示降低缓存开销以及 Hybrid Attention 兼顾计算效率与建模能力。其共同目标是降低长上下文带来的计算与存储代价，同时缓解性能退化。
 - **扩展模型容量**：在计算量基本不变的前提下提升表达能力。MoE通过动态路由仅激活少量专家参与计算，以近乎恒定的 FLOPs 大幅扩展参数规模，已成为主流大模型的关键架构选择。
@@ -20,7 +20,7 @@ Transformer 逐渐成为现代大语言模型的核心机制。但随着参数�
 ## 2 Attention的改进方法
 
 <div align="center">
-  <img src="images/5-1-注意力处理时间与上下文长度.png" alt="Attention处理时间与上下文长度的关系" width="800">
+  <img src="./images/5-1-注意力处理时间与上下文长度.png" alt="Attention处理时间与上下文长度的关系" width="800">
   <p><em>图 1. Attention处理时间与上下文长度的关系</em></p>
 </div>
 
@@ -63,7 +63,7 @@ $$O(nd)$$
 MiniMax M1 算得上是较早采用 Hybrid Attention 的开源大模型，但此后相当一段时间内，大部分 LLM 团队并未在核心架构中引入线性注意力机制。近期，这一思路重新受到关注，例如 Nemotron 3 Super、Kimi K3 等模型相继采用了 Hybrid Attention。
 
 <div align="center">
-  <img src="images/5-2-混合注意力模型架构.png" alt="Nemotron 3 Super (120B-A12B)" width="800">
+  <img src="./images/5-2-混合注意力模型架构.png" alt="Nemotron 3 Super (120B-A12B)" width="800">
   <p><em>图 2. Nemotron 3 Super (120B-A12B)</em></p>
 </div>
 
@@ -74,7 +74,7 @@ Nemotron 3 Super 采用了 Mamba 与标准 Attention 交替组合的架构：Mam
 与 Nemotron 团队直接组合现有模块的方案不同，Kimi 团队提出了 KDA ，在线性注意力的递推公式中引入 $\text{Diag}(\alpha_{t})$ 对隐藏状态施加逐维度的衰减控制，从而更细粒度地管理对历史信息的遗忘与保留，同时增强对序列位置关系的感知能力。
 
 <div align="center">
-  <img src="images/5-3-KDA架构.png" alt="KDA" width="800">
+  <img src="./images/5-3-KDA架构.png" alt="KDA" width="800">
   <p><em>图 3. KDA</em></p>
 </div>
 
@@ -83,7 +83,7 @@ Nemotron 3 Super 采用了 Mamba 与标准 Attention 交替组合的架构：Mam
 $$S_t=(\mathbb I - \beta k_t k_{t}^T)Diag(\alpha_{t})S_{t-1}+\beta k_t v_{t}^T$$
 
 <div align="center">
-  <img src="images/5-4-KDA公式原理.png" alt="KDA的公式原理可视化" width="800">
+  <img src="./images/5-4-KDA公式原理.png" alt="KDA的公式原理可视化" width="800">
   <p><em>图 4. KDA的公式原理可视化</em></p>
 </div>
 
@@ -102,7 +102,7 @@ Kimi 团队认为，这一设计与 RoPE 的思想具有一定的相似性。RoP
 与 Hybrid Attention 通过替换部分层的注意力机制来降低整体复杂度不同，DeepSeek 团队提出了另一种思路：在 标准Attention 计算之前引入轻量级索引器，预测每个 Query 最值得关注的少量 Key Token，仅对这些候选 Token 执行完整的 Attention 计算，从而将计算量从全局 $O(n^2)$ 降低到近似 $O(n \cdot k)$ （ $k \ll n$ ）。
 
 <div align="center">
-  <img src="images/5-5-DeepSeek稀疏注意力.png" alt="DSA" width="800">
+  <img src="./images/5-5-DeepSeek稀疏注意力.png" alt="DSA" width="800">
   <p><em>图 5. DSA</em></p>
 </div>
 
@@ -185,7 +185,7 @@ $$
 *Tips：可学习路由能否发挥作用的关键——并不在于具体采用何种路由（TC/EC...）形式，**而在于输入表示是否已经具备足够的语义结构，使得样本在表示空间中具有可分性，从而支撑稳定且有意义的专家选择**。*
 
 <div align="center">
-  <img src="images/5-6-词元选择路由.png" alt="词元选择模式" width="800">
+  <img src="./images/5-6-词元选择路由.png" alt="词元选择模式" width="800">
   <p><em>图 6. 词元选择模式</em></p>
 </div>
 
@@ -285,7 +285,7 @@ TC_MoE(dim=32, num_experts=10, k=2)，输入文本：
 > 按照字节级切分文本，得到33个token，专家负载统计从0到9号专家处理token总数统计依次为[13, 13, 16, 14, 9, 6, 20, 19, 18, 4]
 
 <div align="center">
-  <img src="images/5-7-专家选择路由.png" alt="专家选择模式" width="800">
+  <img src="./images/5-7-专家选择路由.png" alt="专家选择模式" width="800">
   <p><em>图 7. 专家选择模式</em></p>
 </div>
 
@@ -417,7 +417,7 @@ EC_MoE(dim=32, num_experts=10, k=2)，输入文本：
 - **Hash的局限**：尽管Hash路由在语义灵活性和精细化专家分工上通常不如可学习路由，但在若干基准测试和工程场景中，仍能展现出相当的竞争力。
 
 <div align="center">
-  <img src="images/5-8-局部敏感哈希路由.png" alt="哈希路由" width="800">
+  <img src="./images/5-8-局部敏感哈希路由.png" alt="哈希路由" width="800">
   <p><em>图 8. 哈希路由</em></p>
 </div>
 
@@ -603,7 +603,7 @@ if __name__ == "__main__":
 - **较小的初始化**：考虑到路由器随机初始化困难，于是通过从截断正态分布中抽取元素来初始化权重矩阵，均值为0，适当减小某些线性层、FFN的初始化尺度可以降低训练初期梯度方差，减少早期不稳定现象，提高模型的能力。
 
 <div align="center">
-  <img src="images/5-9-混合专家模型变体.png" alt="Switch Transformer" width="800">
+  <img src="./images/5-9-混合专家模型变体.png" alt="Switch Transformer" width="800">
   <p><em>图 9. Switch Transformer</em></p>
 </div>
 
@@ -630,7 +630,7 @@ if __name__ == "__main__":
 MoE相较于传统稠密模型的优势是它可以**扩大模型参数规模的同时保持计算量基本不变**，从而显著提升模型的表示能力与性能；并且由于MoE的专家是**稀疏激活**的，每次仅有少量专家参与计算，因此各专家*通常是前馈网络*可以作为独立模块分布在不同设备上。路由器只需根据输入将对应的token发送到相应设备，计算便在该专家所在设备上独立完成。这种天然的结构切分方式使MoE能实现高效的**专家级并行**，成为构建超大规模模型时必不可少的并行化策略，也是现代大模型在多机多卡环境下突破容量与性能瓶颈的重要基础。
 
 <div align="center">
-  <img src="images/5-10-混合专家与稠密模型.png" alt="混合专家 vs 稠密模型" width="800">
+  <img src="./images/5-10-混合专家与稠密模型.png" alt="混合专家 vs 稠密模型" width="800">
   <p><em>图 10. 混合专家 vs 稠密模型</em></p>
 </div>
 从上图中我们不难发现，在所示实验设置下 MoE 架构往往比稠密模型收敛更快且表现更好（具体结论依赖数据规模、训练配方与评测任务）。
@@ -1048,7 +1048,7 @@ class MiniMoELLModel(nn.Module):
 DeepSeekMoE一种创新的专家混合模型，其目标是实现**极致的专家专业化**，以解决传统MoE模型中存在的**知识混合**和**知识重复**问题，从而在保持计算成本适中的同时，极大地提升模型性能和参数效率。`DeepSeekMoE`的架构主要通过以下两个策略来实现专家专业化：
 
 <div align="center">
-  <img src="images/5-11-DeepSeek专家细粒度拆分.png" alt="DeepSeekMoE结构示意图" width="800">
+  <img src="./images/5-11-DeepSeek专家细粒度拆分.png" alt="DeepSeekMoE结构示意图" width="800">
   <p><em>图 11. DeepSeekMoE结构示意图</em></p>
 </div>
 
@@ -1063,7 +1063,7 @@ DeepSeekMoE一种创新的专家混合模型，其目标是实现**极致的专�
 - **共享专家**：提出保留若干`共享专家`来捕获通用知识，从而降低路由专家之间的冗余并稳定训练，即在路由专家之外保留 $K_s$ 个共享专家作为常驻接收器或补偿通道。该设计与细粒度分割协同，能在提升专业化的同时保持对通用模式的覆盖。
 
 <div align="center">
-  <img src="images/5-12-共享专家比例实验.png" alt="总参数和激活参数的数量相同的对比实验" width="800">
+  <img src="./images/5-12-共享专家比例实验.png" alt="总参数和激活参数的数量相同的对比实验" width="800">
   <p><em>图 12. 总参数和激活参数的数量相同的对比实验</em></p>
 </div>
 
