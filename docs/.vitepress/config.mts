@@ -90,7 +90,7 @@ const zhNav = [
       { text: '分布式训练', link: '/chapter8/chapter8_第八章分布式训练' },
       { text: 'GPU高性能编程', link: '/chapter7/chapter7_第七章GPU高性能编程' },
       { text: 'Scaling Laws', link: '/chapter9/chapter9_Scaling_Laws' },
-      { text: '推理', link: '/chapter10/推理' },
+      { text: '推理', link: '/chapter10/chapter10_推理' },
       { text: 'RLVR', link: '/chapter14/chapter14_可验证奖励的强化学习' },
       { text: '多模态模型', link: '/chapter15/chapter15_多模态模型' },
     ],
