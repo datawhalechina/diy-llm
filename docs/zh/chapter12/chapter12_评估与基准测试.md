@@ -377,7 +377,7 @@ HellaSwag 可以看作是“情境下的困惑度”，模型不需要输出概�
 [Humanity's Last Exam](https://arxiv.org/abs/2501.14249) 是一个雄心勃勃的项目，包含 2500 道多模态、多学科的选择题和简答题。通过五十万美元奖金池激励社区贡献，并用前沿 LLM 筛选掉过于简单的问题，再经过多阶段审查。局限在于问题征集过程可能存在严重的选择偏差，且问题类型仍局限于有标准答案的“考试”形式。
 
 <div align="center">
-  <img src="./images/12-19-Humanity&#x27;s Last Exam 收集筛选流程.png" alt="Humanity&#x27;s Last Exam 收集筛选流程" width="800">
+  <img src="./images/12-19-Humanity Last Exam 收集筛选流程.png" alt="Humanity&#x27;s Last Exam 收集筛选流程" width="800">
   <p><em>图 19. Humanity's Last Exam 收集筛选流程</em></p>
 </div>
 
