@@ -1,54 +1,26 @@
-# 第十四章：可验证奖励的强化学习 (RLVR)
+# 第 14 章 可验证奖励的强化学习
 
 在之前的课程中，我们讨论了 RLHF（Reinforcement Learning from Human Feedback，基于人类反馈的强化学习）。虽然 RLHF 是使模型遵循指令的关键，但它面临着巨大的扩展性挑战：人类反馈昂贵、缓慢且容易被“过度优化”（Goodhart's Law）。
 
 本章我们将目光转向 **o1** 和 **DeepSeek R1** 等推理模型背后的核心技术——**RLVR (Reinforcement Learning from Verifiable Rewards，基于可验证奖励的强化学习)**。
 
-**核心目标：**
-1.  **算法演进**：理解从 PPO 到 GRPO 的演变逻辑，以及为什么 GRPO 更适合大模型推理训练。
-2.  **工程实现**：深入 PPO 和 GRPO 的代码实现细节，掌握 Advantage 计算与 Loss 设计。
-3.  **前沿案例**：解构 DeepSeek R1、Kimi k1.5 和 Qwen 3 的训练流水线，理解“冷启动数据”、“思维链（CoT）”与“长度控制”的关键作用。
+## 1 本章学习目标
 
-### 缩写速查表
+学习完本章，应该能明白这些问题：
 
-| 缩写 | 英文全称 | 中文名 | 主要作用 |
-|------|----------|--------|----------|
-| **RL** | Reinforcement Learning | 强化学习 | 通过环境反馈的奖励信号优化策略，使模型逐步学会采取能够获得更高回报的行为。 |
-| **RLHF** | Reinforcement Learning from Human Feedback | 基于人类反馈的强化学习 | 通过收集人类偏好数据训练奖励模型，再使用强化学习微调大模型，使模型输出更符合人类价值观和预期，是当前对齐技术的核心框架。 |
-| **RLVR** | Reinforcement Learning from Verifiable Rewards | 基于可验证奖励的强化学习 | 利用可自动验证的客观信号（如数学题答案正确性、代码执行结果）作为奖励，无需人工标注，有效提升模型在推理、数学等领域的准确性。 |
-| **LLM** | Large Language Model | 大语言模型 | 以海量文本训练、能够理解和生成自然语言的模型，也是本章强化学习训练的主要对象。 |
-| **LM** | Language Model | 语言模型 | 根据上下文对下一个 token 建模并生成序列的模型；本章中的 Policy LM 是正在被优化的策略模型。 |
-| **CoT** | Chain of Thought | 思维链 | 让模型显式生成中间推理步骤，有助于提升复杂数学、代码和逻辑任务的推理能力。 |
-| **SFT** | Supervised Fine-Tuning | 监督微调 | 使用带有目标答案或示范推理过程的数据对预训练模型进行有监督训练，常用于 RL 之前的冷启动。 |
-| **DPO** | Direct Preference Optimization | 直接偏好优化 | 绕过显式奖励模型和在线强化学习，直接利用偏好数据优化策略的对齐方法。 |
-| **RM** | Reward Model | 奖励模型 | 根据任务目标或人类偏好为模型输出打分，为策略优化提供奖励信号。 |
-| **VM** | Value Model | 价值模型 | 估计给定状态未来能够获得的回报，在 PPO 中用于计算优势函数。 |
-| **PPO** | Proximal Policy Optimization | 近端策略优化 | 通过裁剪概率比率限制参数更新幅度，兼顾训练稳定性和样本效率，是 RLHF 最常用的底层算法之一。 |
-| **TRPO** | Trust Region Policy Optimization | 信任域策略优化 | 通过约束策略更新的 KL 散度，确保每次更新处于“信任域”内；它是 PPO 的前身，理论上更稳定但计算开销较大。 |
-| **GRPO** | Group Relative Policy Optimization | 组相对策略优化 | DeepSeek 提出的 PPO 改进方法，无需单独的价值网络，在组内通过相对奖励标准化来降低方差，减少显存占用并加速大模型训练。 |
-| **GAE** | Generalized Advantage Estimation | 广义优势估计 | 使用多个时间步的时序差分误差估计优势函数，在偏差和方差之间取得平衡，降低策略梯度的方差。 |
-| **TD** | Temporal Difference | 时序差分 | 根据即时奖励和下一状态的价值估计更新当前价值，是 GAE 和许多价值函数方法的基础。 |
-| **KL** | Kullback–Leibler Divergence | KL 散度 / 相对熵 | 衡量两个概率分布的差异，在 PPO 和 RLHF 中常用于约束策略不要偏离参考模型太远。 |
-| **MSE** | Mean Squared Error | 均方误差 | 衡量预测值与目标值之间平方误差的损失函数，本章用于训练价值模型。 |
-| **PRM** | Process Reward Model | 过程奖励模型 | 对中间推理步骤而非只有最终答案进行评分，为模型提供更细粒度的过程监督。 |
-| **MCTS** | Monte Carlo Tree Search | 蒙特卡洛树搜索 | 通过反复模拟和扩展候选路径搜索解空间，曾被探索用于增强推理模型的测试时计算。 |
-| **RFT** | Reinforcement Fine-Tuning | 强化微调 | 根据任务奖励对模型进行强化微调；本章中通常指只奖励最终答案是否正确的基础方法。 |
-| **PS** | Process Supervision | 过程监督 | 对解题过程或中间步骤提供监督信号，而不只评价最终答案。 |
-| **OS** | Online Sampling | 在线采样 | 在训练过程中动态采样并更新数据；本章的 GRPO+OS 指标准的在线采样设置。 |
-| **RMSD** | Root Mean Square Deviation | 均方根偏差 | 衡量预测蛋白质结构与真实结构之间差异的指标，用于说明 AlphaFold 中的可验证目标。 |
-| **TTS** | Test-Time Scaling | 测试时扩展 | 在推理阶段增加或调整计算预算（例如思考 token 数），以换取更高的任务性能。 |
-| **GSM8K** | Grade School Math 8K | 小学数学应用题数据集 | 包含约 8.5K 道小学数学文字题，常用于评估模型的数学推理能力。 |
-| **MATH** | MATH benchmark | 数学推理基准 | 覆盖高中竞赛数学等多种难度的数学题，用于评估更复杂的数学推理能力。 |
-| **AIME** | American Invitational Mathematics Examination | 美国数学邀请赛 | 高难度数学竞赛评测，常用于衡量推理模型的数学能力。 |
-| **GPQA** | Graduate-Level Google-Proof Q&A | 研究生水平问答基准 | 需要专业知识和深度推理的问答评测，题目设计为不易通过简单检索解决。 |
+- **算法演进**：理解从 PPO 到 GRPO 的演变逻辑，以及为什么 GRPO 更适合大模型推理训练。
+- **工程实现**：深入 PPO 和 GRPO 的代码实现细节，掌握 Advantage 计算与 Loss 设计。
+- **前沿案例**：解构 DeepSeek R1、Kimi k1.5 和 Qwen 3 的训练流水线，理解“冷启动数据”、“思维链（CoT）”与“长度控制”的关键作用。
 
-## 14.1 为什么需要 RLVR？
+本章讲解过程中的[专业名词解释](#缩写速查表)。
+
+## 2 为什么需要 RLVR？
 
 在 AlphaGo 或 AlphaFold 等领域，强化学习取得了巨大成功，因为它们拥有**完美的模拟器**和**明确的奖励函数**（赢/输，蛋白质折叠能级）。
 
 在语言模型中，如果我们能找到类似的领域——**答案客观、可验证**（如数学题、代码生成），我们就能利用大规模的计算资源来替代昂贵的人类标注，通过强化学习让模型自我进化。这就是 RLVR 的核心愿景。
 
-### 14.1.1 RLHF 的困境
+### 2.1 RLHF 的困境
 
 传统的 RLHF 依赖人类对模型输出的成对偏好判断（如 “A 比 B 好”）。然而，这种方法存在三大根本性问题：
 
@@ -58,8 +30,7 @@
 
 > RLHF 优化的是代理目标（人类偏好），而非真实目标（任务正确性）。
 
-
-### 14.1.2 成功案例的启示
+### 2.2 成功案例的启示
 
 回顾 AlphaGo、AlphaFold 等 RL 成功案例，其共同点是：**奖励函数是明确、可验证、可自动计算的**。例如：
 - 围棋：最终是否获胜（0/1）；
@@ -67,7 +38,7 @@
 
 这类任务中，RL 算法可直接优化**真实目标**，无需人类中介。这启发我们：**能否将 RL 引入语言模型的“可验证任务”中？**
 
-### 14.1.3 RLVR 的定位
+### 2.3 RLVR 的定位
 
 RLVR 聚焦于一类特殊任务：**输出可被程序自动判分**。典型场景包括：
 - **数学推理**：答案是否与标准解一致（如 GSM8K、MATH）；
@@ -77,7 +48,7 @@ RLVR 聚焦于一类特殊任务：**输出可被程序自动判分**。典型�
 在这些场景中，奖励函数 $R(z)$ 可定义为：
 
 $$
-R(z) = 
+R(z) =
 \begin{cases}
 1 & \text{若 } z \text{ 正确} \\
 0 & \text{否则}
@@ -86,7 +57,7 @@ $$
 
 或更精细的**过程奖励**（如每步推理得分）。这种**高信噪比、可规模化**的奖励，正是 RL 大展身手的舞台。
 
-> ✅ **RLVR 的本质**：在那些“对错可被自动判定”的窄域任务中，绕过人类偏好，直接用形式化验证机制提供强化学习的奖励信号，从而实现更可靠、可扩展、可验证的智能体训练
+> **RLVR 的本质**：在那些“对错可被自动判定”的窄域任务中，绕过人类偏好，直接用形式化验证机制提供强化学习的奖励信号，从而实现更可靠、可扩展、可验证的智能体训练
 
 下面是对 RLHF 和 RLVR 的简单对比：
 
@@ -97,17 +68,17 @@ $$
 | 奖励质量 | 主观、有噪声、成本高 | 客观、精确、可扩展 |
 | 对齐目标 | “让人觉得好” | “在形式意义上正确” |
 
-## 14.2 算法演进：从 PPO 到 GRPO
+## 3 算法演进：从 PPO 到 GRPO
 
 要理解现在的 DeepSeek-R1 等推理模型背后的 GRPO 算法，我们必须先回顾它的前身 PPO，并明白为什么要抛弃它。
 
-### 14.2.1 PPO
+### 3.1 PPO
 
-#### 强化学习中策略优化方法的发展脉络
+**强化学习中策略优化方法的发展脉络**
 
 从原始的策略梯度（Policy Gradient） → 到更稳定的TRPO（Trust Region Policy Optimization） → 再到更实用的PPO（Proximal Policy Optimization）
 
-在强化学习中，我们有一个**策略**（policy）$\pi_\theta(a|s)$，它用参数 $\theta$ 控制智能体如何根据状态 $s$ 选择动作 $a$。  
+在强化学习中，我们有一个**策略**（policy）$\pi_\theta(a|s)$，它用参数 $\theta$ 控制智能体如何根据状态 $s$ 选择动作 $a$。
 目标是：**最大化期望回报**（expected return）：
 
 $$
@@ -118,8 +89,7 @@ $$
 
 我们需要计算 $\nabla_\theta J(\theta)$ 来用梯度上升更新 $\theta$。
 
-
-🔹 尝试 1: 策略梯度（Policy Gradient）
+尝试 1: 策略梯度（Policy Gradient）
 
 利用**似然比技巧**（likelihood ratio trick），可以推出：
 
@@ -141,9 +111,9 @@ $$
 - **高方差（high variance）**：因为整个轨迹的总奖励 $R(\tau)$ 被用作每个动作的“信号”，但很多动作其实和最终结果无关。
 - **更新不稳定**：一次更新可能太大，导致策略崩溃（“catastrophic collapse”）。
 
-> ✅ 所以策略梯度**理论上正确，但实践中难用**。
+> 所以策略梯度**理论上正确，但实践中难用**。
 
-🔹 尝试 2: TRPO（Trust Region Policy Optimization）
+尝试 2: TRPO（Trust Region Policy Optimization）
 
 核心思想：不要直接用原始梯度更新，而是**每次只允许策略变动一点点**，确保新策略 $\pi_{\theta_{\text{new}}}$ 和旧策略 $\pi_{\theta_{\text{old}}}$ 足够接近。
 
@@ -157,15 +127,13 @@ $$
 - 这个目标是**近似**策略改进（使用重要性采样 + 优势函数 $A$）
 - 约束项限制 KL 散度不超过一个小常数 $\delta$
 
-
 TRPO 特点：
-- ✅ 稳定，理论保证单调改进
-- ❌ 实现极其复杂：需要用共轭梯度（conjugate gradient）或二阶优化，难以扩展到大模型（如 LLM）
+-  稳定，理论保证单调改进
+-  实现极其复杂：需要用共轭梯度（conjugate gradient）或二阶优化，难以扩展到大模型（如 LLM）
 
 > 所以 TRPO 是“理想但笨重”的方法。
 
-
-🔹 尝试 3: PPO（Proximal Policy Optimization）
+尝试 3: PPO（Proximal Policy Optimization）
 
 动机：能不能**用一个简单的方法，近似 TRPO 的“小步更新”思想**，而不用解复杂的约束优化？
 
@@ -195,25 +163,23 @@ $$
   - 我们希望减小 $\pi_\theta(a_t|s_t)$，即让 $r_t < 1$
   - 但如果 $r_t < 1-\epsilon$，说明惩罚太猛 → 裁剪为 $1-\epsilon$
 
-> 🎯 这样，PPO **自动限制了策略更新的步长**，无需显式 KL 约束！
+> 这样，PPO **自动限制了策略更新的步长**，无需显式 KL 约束！
 
-
-🔁 三者关系总结
+三者关系总结
 
 | 方法 | 核心思想 | 是否约束更新步长？ | 实现难度 | 适合 LLM 吗？ |
 |------|--------|------------------|--------|-------------|
-| **Policy Gradient** | 直接梯度上升 | ❌ 否 | 简单 | ❌（方差大） |
-| **TRPO** | 用 KL 散度约束更新 | ✅ 是（硬约束） | 极难 | ❌（内存/计算高） |
-| **PPO** | 用裁剪近似小步更新 | ✅ 是（软约束） | 中等 | ✅（主流选择） |
+| **Policy Gradient** | 直接梯度上升 |  否 | 简单 | （方差大） |
+| **TRPO** | 用 KL 散度约束更新 |  是（硬约束） | 极难 | （内存/计算高） |
+| **PPO** | 用裁剪近似小步更新 |  是（软约束） | 中等 | （主流选择） |
 
-
-####  PPO 的痛点
+**PPO 的痛点**
 
 下图展示了强化学习从人类反馈（RLHF）中，使用近端策略优化（PPO）算法训练语言模型的整体流程。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-0-ppo-flowchart.png" />
-   <p>图14.0 ppo算法流程图</p>
+  <img src="./images/14-0-ppo-flowchart.png" alt="ppo算法流程图" width="800">
+  <p><em>图 1. ppo算法流程图</em></p>
 </div>
 
 流程以一个用户查询 x 开始，旧策略模型（**Policy LM**），根据输入 x 生成响应序列 $y_1, y_2, ..., y_{t-1}$。将(x,y)分解成 **状态-动作对$(s_t, a_t)$** 。在语言模型中：
@@ -243,9 +209,9 @@ $$
 **PPO-clip Loss** 是 PPO 的核心损失函数，目标是在保证策略更新稳定的前提下，最大化期望回报（即 Reward Model 给出的分数）。
 
 $$
-\mathcal{L}^{\text{CLIP}}(\theta) = \mathbb{E}_t \left[ \min\left( 
-r_t(\theta) \cdot \hat{A}_t,\ 
-\text{clip}\big(r_t(\theta), 1-\epsilon, 1+\epsilon\big) \cdot \hat{A}_t 
+\mathcal{L}^{\text{CLIP}}(\theta) = \mathbb{E}_t \left[ \min\left(
+r_t(\theta) \cdot \hat{A}_t,\
+\text{clip}\big(r_t(\theta), 1-\epsilon, 1+\epsilon\big) \cdot \hat{A}_t
 \right) \right]
 $$
 
@@ -269,15 +235,15 @@ $$
 当我们看 OPENAI 关于 [PPO](https://spinningup.openai.com/en/latest/algorithms/ppo.html) 算法的文档，他看起来很简单：
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-1-ppo算法伪代码.png" />
-   <p>图14.1 ppo算法伪代码</p>
+  <img src="./images/14-1-ppo算法伪代码.png" alt="ppo算法伪代码" width="800">
+  <p><em>图 2. ppo算法伪代码</em></p>
 </div>
 
 但在实践上，PPO 的理论和实现完全是两回事。PPO 理论简洁，但实际调参和实现陷阱极多（如价值函数训练、优势估计、KL 控制、奖励归一化等），有篇博客甚至列出了[37个PPO实现细节](https://iclr-blog-track.github.io/2022/03/25/ppo-implementation-details/)，发现不同的 PPO 变体在 RL 的 benchmarks 表现出了不同的得分。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-2-ppo实现细节对性能的影响.png" />
-   <p>图14.2 ppo实现细节对性能的影响.png</p>
+  <img src="./images/14-2-ppo实现细节对性能的影响.png" alt="ppo实现细节对性能的影响.png" width="800">
+  <p><em>图 3. ppo实现细节对性能的影响.png</em></p>
 </div>
 
 而且还有一篇论文，专门探讨为什么细节对于 PPO 如此重要，请参考 [Implementation Matters in Deep Policy Gradients: A Case Study on PPO and TRPO](https://arxiv.org/abs/2005.12729)。以及如果你真的把他们搞砸了，甚至没有正确计算策略梯度，但效果反而更好。如果你去看 PPO 的实现细节，会发现情况非常复杂，所以我们确实需要通过代码看下 PPO 的具体实现：
@@ -311,7 +277,6 @@ def _shape_reward(self, rewards, responses, logprobs, ref_logprobs):
 
     return dict(shaped_rewards=shaped_rewards, non_score_rewards=non_score_rewards, kl=kl)
 ```
-
 
 **广义优势估计（GAE）：** 用 GAE 估计每个 token 的优势函数（Advantage），替代原始奖励，大幅降低策略梯度方差。
 
@@ -428,14 +393,12 @@ def compute_loss(self, rollouts):
     return loss, stats
 ```
 
-
 在语言模型的 PPO 训练过程中，一个健康、合理的训练曲线是什么样？
 
-
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-3-ppo训练过程曲线.png" />
-   <p>图14.3 ppo训练过程曲线</p>
- </div>
+  <img src="./images/14-3-ppo训练过程曲线.png" alt="ppo训练过程曲线" width="800">
+  <p><em>图 4. ppo训练过程曲线</em></p>
+</div>
 
 - Increasing overall rewards：总奖励上升。`kl_sum_seq` 这个名字有点误导性，它实际上代表的是每个序列的塑形奖励（shaped rewards）的总和，这个“塑形奖励” = 任务奖励（如数学题答对得高分） + KL惩罚项（负值），衡量模型的整体表现是否在变好。
 - Incl. reward model： 任务奖励上升。这个指标衡量的是模型直接从奖励模型那里获得的任务奖励，不包括KL惩罚。它反映了模型在核心任务上的表现，比如回答问题的准确性、遵循指令的能力等。
@@ -443,7 +406,7 @@ def compute_loss(self, rollouts):
 
 这三条曲线共同描绘了一个健康的PPO训练过程：模型在奖励模型的引导下，逐步学会生成更好的回复，同时通过KL惩罚保持一定的稳定性，避免过度偏离初始的良好行为。
 
-### 14.2.2 为什么我们需要另一个强化学习（RL）算法？
+### 3.2 为什么我们需要另一个强化学习（RL）算法？
 
 **1. 为什么不直接用 PPO？**
 PPO 是目前最成功的在线强化学习算法之一，尤其在语言模型的对齐（Alignment）中被广泛应用。但它有两个主要缺点：
@@ -454,7 +417,7 @@ PPO 是目前最成功的在线强化学习算法之一，尤其在语言模型�
     - **内存消耗大 (memory hungry)**：价值网络与策略网络共享主干结构，但需要额外的参数和计算资源。
     - **额外的调参 (additional tuning)**：价值网络本身也需要训练和优化，这增加了整个系统的复杂性和超参数搜索空间。你需要同时调优策略网络和价值网络，确保它们协同工作。
 
-> ✅ **总结**：PPO 虽然强大且有效，但其**工程复杂度高、资源消耗大、调参困难**，尤其是在低资源或追求高效开发的场景下，显得不够轻便。
+> **总结**：PPO 虽然强大且有效，但其**工程复杂度高、资源消耗大、调参困难**，尤其是在低资源或追求高效开发的场景下，显得不够轻便。
 
 **2. 为什么不直接用 DPO？**
 
@@ -464,23 +427,20 @@ DPO（Direct Preference Optimization）是近年来兴起的一种替代方案�
 
 - **离线算法 (Offline)**：DPO 是一种**离线算法**。它在固定的、预先收集好的偏好数据集上进行一次性训练。这与 PPO 的**在线学习**特性不同。PPO 可以在训练过程中不断生成新的样本、获得新的反馈，并据此迭代更新策略。DPO “理论上可以通过迭代使其在线化”，但这会增加复杂性，失去了其作为简单离线方法的优势。
 
-> ✅ **总结**：DPO 在处理**人类偏好数据**时非常优雅和高效，但它**不适用于非成对的、可验证的标量奖励场景**，并且其离线特性限制了它在需要持续探索和在线学习任务中的应用。
+> **总结**：DPO 在处理**人类偏好数据**时非常优雅和高效，但它**不适用于非成对的、可验证的标量奖励场景**，并且其离线特性限制了它在需要持续探索和在线学习任务中的应用。
 
-
-
-### 14.2.3 GRPO：去掉了价值函数的 PPO
+### 3.3 GRPO：去掉了价值函数的 PPO
 
 **GRPO (Group Relative Policy Optimization)** 是在 [DeepSeekMath](https://arxiv.org/pdf/2402.03300) 论文中提出并在 [Deepseek-R1](https://arxiv.org/abs/2501.12948) 中发扬光大的算法。GRPO 在 PPO 的基础上，移除了价值函数（Value Function）和优势计算（Advantage Computation）。这是对 PPO 最大的改动，也是其轻量化的根本原因。并且采用了一种全新的方式来估算“优势”——即 “组内 z-score”（z-score within group）。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-4-ppo与grpo的对比.png" />
-   <p>图14.4 PPO与GRPO的对比</p>
- </div>
+  <img src="./images/14-4-ppo与grpo的对比.png" alt="PPO与GRPO的对比" width="800">
+  <p><em>图 5. PPO与GRPO的对比</em></p>
+</div>
 
-> ✅ 简单来说，GRPO = PPO - Value Model + Group Z-Score Advantage。
+> 简单来说，GRPO = PPO - Value Model + Group Z-Score Advantage。
 
-
-#### GRPO 的目标函数
+**GRPO 的目标函数**
 
 $$
 \mathcal{J}_{GRPO}(\theta) = \mathbb{E} \left[ q \sim P(Q), \{o_i\}_{i=1}^G \sim \pi_{\theta_{old}}(O|q) \right] \frac{1}{G} \sum_{i=1}^{G} \left( \min\left( \frac{\pi_\theta(o_i|q)}{\pi_{\theta_{old}}(o_i|q)} A_i, \text{clip}\left( \frac{\pi_\theta(o_i|q)}{\pi_{\theta_{old}}(o_i|q)}, 1-\epsilon, 1+\epsilon \right) A_i \right) - \beta \mathbb{D}_{KL} \left( \pi_\theta || \pi_{ref} \right) \right)
@@ -494,6 +454,7 @@ $$
     - `β` 是控制 KL 惩罚强度的超参数。
 
 PPO 的目标函数：
+
 $$
 \min \left( \frac{\pi_\theta(a|s)}{\pi_{\theta_k}(a|s)} A^{\pi_{\theta_k}}(s,a), \text{ clip} \left( \frac{\pi_\theta(a|s)}{\pi_{\theta_k}(a|s)}, 1-\epsilon, 1+\epsilon \right) A^{\pi_{\theta_k}}(s,a) \right)
 $$
@@ -502,8 +463,7 @@ GRPO 与 PPO 两者的目标函数结构非常相似，都包含概率比和裁�
 - **PPO**: `A` 是通过价值网络 `V(s)` 和 GAE 计算出来的，这是一个复杂且资源密集的过程。
 - **GRPO**: `A` 是通过组内 z-score 计算出来的，这是一个简单、快速、无需额外模型的过程。
 
-
-#### KL 散度的计算
+**KL 散度的计算**
 
 $$
 \mathbb{D}_{KL} \left( \pi_\theta || \pi_{ref} \right) = \frac{\pi_{ref}(o_i|q)}{\pi_\theta(o_i|q)} - \log \frac{\pi_{ref}(o_i|q)}{\pi_\theta(o_i|q)} - 1
@@ -511,7 +471,7 @@ $$
 
 这是一个近似的 KL 散度公式。它不是标准的积分形式，而是在每个采样点 $o_i$ 上进行近似。它的作用是衡量当前策略 $π_θ$ 和参考策略 $π_{ref}$ 在生成特定输出 $o_i$ 时的概率差异。
 
-#### 组内 z-score 优势
+**组内 z-score 优势**
 
 $$
 A_i = \frac{r_i - \text{mean}(\{r_1, r_2, \cdots, r_G\})}{\text{std}(\{r_1, r_2, \cdots, r_G\})}
@@ -520,6 +480,7 @@ $$
 这是 GRPO 的灵魂所在！它完全抛弃了 PPO 中复杂的 GAE 计算。
 
 **如何计算？**
+
 - 对于每一个问题 $q$，从旧策略 $π_{old}$ 中**采样一组（G个）不同的回复** ${o_1, o_2, ..., o_G}$。
 - 用奖励模型或可验证规则，为这 G 个回复**分别打分**，得到一组奖励 ${r_1, r_2, ..., r_G}$。
 - 计算这组奖励的**均值（mean）和标准差（std）**。
@@ -537,7 +498,7 @@ $$
 
 > 在在线学习（边采样边更新）的场景下，GRPO 本质上就是一种使用了组内标准化奖励的策略梯度方法。
 
-#### 💻 代码解读：一个极简的 GRPO 实现
+**代码解读：一个极简的 GRPO 实现**
 
 GRPO 的实现非常简单，不需要复杂的 GAE 计算。下面我们基于 [nano-aha-moment](https://github.com/McGill-NLP/nano-aha-moment/blob/main/nano_r1_script.py) 项目中对于 GRPO 算法的实现，对关键代码进行分析。如下compute_pg_loss 是一个典型的 GRPO 损失计算函数：
 
@@ -688,14 +649,14 @@ episodes = {
     return episodes, stats
 ```
 
-#### GRPO 的实际效果
+**GRPO 的实际效果**
 
 GRPO 的实际效果如何呢？下图展示了在两个数学推理基准测试上的模型性能：
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-5-grpo与其他训练方法在两个数学推理基准测试上的模型性能对比.png" />
-   <p>图14.5 GRPO与其他训练方法在两个数学推理基准测试上的模型性能对比</p>
- </div>
+  <img src="./images/14-5-grpo与其他训练方法在两个数学推理基准测试上的模型性能对比.png" alt="GRPO与其他训练方法在两个数学推理基准测试上的模型性能对比" width="800">
+  <p><em>图 6. GRPO与其他训练方法在两个数学推理基准测试上的模型性能对比</em></p>
+</div>
 
 左图 GSM8K 是一个小学数学应用题数据集，右图 MATH 这是一个更难的高中数学竞赛题数据集。Y轴是准确率（Acc %），X轴是训练步数（Steps）。图中有多条曲线，代表不同的训练方法：
 
@@ -710,33 +671,35 @@ GRPO 的实际效果如何呢？下图展示了在两个数学推理基准测试
 - 过程监督（PS）带来额外增益：在大多数训练步数下，蓝色线（GRPO+PS）略高于橙色线（GRPO+OS）。这表明，如果能够提供关于“解题过程”的监督信号，模型的性能可以得到进一步提升。
 - GRPO 的稳定性：相比于波动较大的 RFT 和 Online RFT 曲线，GRPO 的曲线相对更平滑，这反映了其算法设计的稳定性。
 
-### 14.2.4 GRPO 的潜在缺陷：长度偏差 (Length Bias)
+### 3.4 GRPO 的潜在缺陷：长度偏差 (Length Bias)
 
 虽然 GRPO 效果拔群，但学术界（如 "Dr. GRPO" 论文）指出其数学上存在瑕疵：
-#### 1. **有偏梯度**
+
+**有偏梯度**
 
 GRPO 通过“组内 z-score”来归一化奖励或计算优势，这样做是为了在不引入值函数的情况下提高训练稳定性。然而，计算这个 z-score 中涉及的标准差（stdev）可能依赖于所观察到的样本（可能与当前策略的输出有关），从而使得整个过程不再是严格意义上无偏的基线减法，可能会在理论上引入微小的偏差。
 
 一个无偏梯度版本的 GRPO 是怎样的？
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-6-Dr-GRPO与标准的GRPO的数学公式与性能对比.png" />
-   <p>图14.6 Dr.GRPO与标准的GRPO的数学公式与性能对比</p>
- </div>
+  <img src="./images/14-6-Dr-GRPO与标准的GRPO的数学公式与性能对比.png" alt="Dr.GRPO与标准的GRPO的数学公式与性能对比" width="800">
+  <p><em>图 7. Dr.GRPO与标准的GRPO的数学公式与性能对比</em></p>
+</div>
 
 Dr. GRPO 的核心改动在于移除了 GRPO 原有的 $\frac{1}{|o_i|}$​（响应长度归一化）和 $\frac{1}{\text{std}(\{R(q, o_1), \dots, R(q, o_G)\})}$​（标准差归一化），从而修正了 GRPO 中存在的响应长度偏见和问题难度偏见。
 
 右图展示了 GRPO 和 Dr. GRPO 在训练过程中的奖励（Reward）与输出长度（Output length）之间的关系。Dr. GRPO 通过移除偏见，有效地阻止了模型生成不必要的冗长响应（尤其是在回答错误时），从而提高了 token 效率。
 
-
-#### 2. **长度偏见**
+**长度偏见**
 
 标准差被用来“加权”（upweights）那些“太容易”或“太难”的问题。
 
 这种偏见源于在GRPO（Group Relative Policy Optimization）的目标函数中，将优势函数（Advantage）除以响应的长度 \(|o_i|\)。
 
 GRPO的目标函数中，针对单个响应 \(o_i\) 在时间步 \(t\) 的梯度更新部分会涉及以下项：
+
 \[ \dots \times \frac{\hat{A}_{i,t}}{|o_i|} \dots \]
+
 其中：
 *   \(|o_i|\)：表示响应 \(o_i\) 的长度（token数量）。
 *   \(\hat{A}_{i,t}\)：是优势函数，其计算方式为 \(\hat{A}_{i,t} = R(q, o_i) - \text{mean}(\{R(q, o_1), \dots, R(q, o_G)\}) / \text{std}(\{R(q, o_1), \dots, R(q, o_G)\})\)，其中 \(R(q, o_i)\) 是响应 \(o_i\) 的回报（reward）。
@@ -746,41 +709,42 @@ GRPO的目标函数中，针对单个响应 \(o_i\) 在时间步 \(t\) 的梯度
 
 这种机制导致模型在生成错误回答时，更倾向于生成更长的响应，这是一种“越错越长”的现象。
 
-## 14.3 案例研究
+## 4 案例研究
 
 这里我们介绍三个关于 RLVR 的工作：
-- Deepseek R1：是许多近期 RLVR 工作的核心，包含许多有趣的细节。 
-- Kimi K1.5：与 R1 同时期，RLVR 提供了与 R1 互补的细节。 
+- Deepseek R1：是许多近期 RLVR 工作的核心，包含许多有趣的细节。
+- Kimi K1.5：与 R1 同时期，RLVR 提供了与 R1 互补的细节。
 - Qwen 3：最新的开源推理模型尝试，低数据量 RLVR
 
-### 14.3.1 DeepSeek R1
+### 4.1 DeepSeek R1
 
 [DeepSeek R1](https://arxiv.org/pdf/2501.12948)这篇论文引起了不小的轰动。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-7-DeepSeek-R1引起广泛的关注.png" />
-   <p>图14.7 DeepSeek-R1引起广泛的关注</p>
- </div>
+  <img src="./images/14-7-DeepSeek-R1引起广泛的关注.png" alt="DeepSeek-R1引起广泛的关注" width="800">
+  <p><em>图 8. DeepSeek-R1引起广泛的关注</em></p>
+</div>
 
 R1 有何特别之处？
 
-- 性能超越 OpenAI O1 
-- 开放的 RL 配方（且相当简单） 
-    - 终结了关于 MCTS/PRM 必要性的猜测 
+- 性能超越 OpenAI O1
+- 开放的 RL 配方（且相当简单）
+    - 终结了关于 MCTS/PRM 必要性的猜测
 - SFT 见解（包括 R1-zero 和 distil-r1）
 
 他们沿用来自 DeepSeekMath 这篇论文里的 GRPO 成果。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-8-GRPO和其他算法的对比.png" />
-   <p>图14.8 GRPO和其他算法的对比</p>
+  <img src="./images/14-8-GRPO和其他算法的对比.png" alt="GRPO和其他算法的对比" width="800">
+  <p><em>图 9. GRPO和其他算法的对比</em></p>
 </div>
 
 该图展示了在两个数据集——GSM8K（左图）和 MATH（右图）——上，四种不同算法（RFT、Online RFT、GRPO+OS、GRPO+PS）在训练过程中准确率（Acc %）随训练步数（Steps）的变化。
 
 DeepSeek R1 的成功证明了**纯强化学习**在推理任务上的巨大潜力。
 
-#### R1-Zero：纯粹的 RL
+**R1-Zero：纯粹的 RL**
+
 *   **设置**: 直接在 Base 模型（DeepSeek-V3）上运行 GRPO。
 *   **奖励**:
     *   **准确性奖励**: 答案对不对？（通过规则匹配或编译器验证）。
@@ -788,71 +752,71 @@ DeepSeek R1 的成功证明了**纯强化学习**在推理任务上的巨大潜�
     - 数据：未公开
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-9-Deepseek-R1-Zero和OpenAI-o1在相关推理基准上的性能对比.png" />
-   <p>图14.9 Deepseek-R1-Zero和OpenAI-o1在相关推理基准上的性能对比</p>
+  <img src="./images/14-9-Deepseek-R1-Zero和OpenAI-o1在相关推理基准上的性能对比.png" alt="Deepseek-R1-Zero和OpenAI-o1在相关推理基准上的性能对比" width="800">
+  <p><em>图 10. Deepseek-R1-Zero和OpenAI-o1在相关推理基准上的性能对比</em></p>
 </div>
 
 在大多数情况下，DeepSeek-R1 与 o1-mini 的表现相当或更好，并且在几个任务上与 o1-0912 的表现相当。但在代码领域 DeepSeek-R1 的表现不如 o1 模型。
 
 **Deepseek-R1-Zero 产生了有趣的现象** **Aha Moment (顿悟时刻)**: 模型在训练中期开始学会自我反思（Self-correction），例如“等等，我算错了，应该重新尝试...”。
-    
+
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-10-DeepSeek-R1-Zero在训练期间的AIME准确率和在训练集上的平均响应长度.png" />
-   <p>图14.10 DeepSeek-R1-Zero在训练期间的AIME准确率和在训练集上的平均响应长度</p>
+  <img src="./images/14-10-DeepSeek-R1-Zero在训练期间的AIME准确率和在训练集上的平均响应长度.png" alt="DeepSeek-R1-Zero在训练期间的AIME准确率和在训练集上的平均响应长度" width="800">
+  <p><em>图 11. DeepSeek-R1-Zero在训练期间的AIME准确率和在训练集上的平均响应长度</em></p>
 </div>
 
-思维时间的增加促进了复杂行为的自主发展。 具体而言，DeepSeek-R1-Zero 越来越多地展现出高级推理策略，例如反思性推理和系统性地探索替代解决方案，显著提升了其在数学和编码等可验证任务上的表现。 
+思维时间的增加促进了复杂行为的自主发展。 具体而言，DeepSeek-R1-Zero 越来越多地展现出高级推理策略，例如反思性推理和系统性地探索替代解决方案，显著提升了其在数学和编码等可验证任务上的表现。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-11-aha-moment的发现.png" />
-   <p>图14.11 aha moment的发现</p>
+  <img src="./images/14-11-aha-moment的发现.png" alt="aha moment的发现" width="800">
+  <p><em>图 12. aha moment的发现</em></p>
 </div>
 
 值得注意的是，在训练过程中，DeepSeek-R1-Zero 表现出一个“顿悟时刻”，其特征是在反思过程中使用“等等”一词的频率突然增加。这一时刻标志着推理模式的显著变化，并清晰地展示了 DeepSeek-R1-Zero 的自我演化过程。
 
-##### 但也许有点言过其实？
+**但也许有点言过其实？**
 
 GRPO 使用的是有偏的优化目标，当优化目标（无论是奖励模型还是 DPO 的损失函数）无意中偏向于特定长度的输出时，模型在追求最大化该目标的过程中，就会表现出“长度偏见”。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-6-Dr-GRPO与标准的GRPO的数学公式与性能对比.png" />
-   <p>图14.6 Dr.GRPO与标准的GRPO的数学公式与性能对比</p>
- </div>
+  <img src="./images/14-6-Dr-GRPO与标准的GRPO的数学公式与性能对比.png" alt="Dr.GRPO与标准的GRPO的数学公式与性能对比" width="800">
+  <p><em>图 13. Dr.GRPO与标准的GRPO的数学公式与性能对比</em></p>
+</div>
 
 基础模型早已表现出“aha moment”：
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-12-DeepSeek-V3-Base早已展现出aha-moment现象案例.png" />
-   <p>图14.12 DeepSeek-V3-Base早已展现出aha-moment现象案例</p>
+  <img src="./images/14-12-DeepSeek-V3-Base早已展现出aha-moment现象案例.png" alt="DeepSeek-V3-Base早已展现出aha-moment现象案例" width="800">
+  <p><em>图 14. DeepSeek-V3-Base早已展现出aha-moment现象案例</em></p>
 </div>
 
-####  DeepSeek-R1
+**DeepSeek-R1**
 
 尽管 DeepSeek-R1-Zero 展现出强大的推理能力，但它也面临一些问题。DeepSeek-R1-Zero 在可读性差和语言混合等方面存在挑战，因为 DeepSeek-V3-Base 是在多种语言上进行训练的，特别是英语和中文。为解决这些问题，Deepseek 团队开发了 DeepSeek-R1，其流程如图 2 所示。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-13-Deepseek-R1开发流程.png" />
-   <p>图14.13 Deepseek-R1开发流程</p>
+  <img src="./images/14-13-Deepseek-R1开发流程.png" alt="Deepseek-R1开发流程" width="800">
+  <p><em>图 15. Deepseek-R1开发流程</em></p>
 </div>
 
-##### 阶段 1：DeepSeek-R1-Zero
+**阶段 1：DeepSeek-R1-Zero**
 
 使用 DeepSeek-V3-Base 作为基础模型， 完全依赖于强化学习，奖励信号主要来自规则型奖励（Rule-based Reward），包括准确性（Accuracy）和格式（Format）奖励。
 
-##### 阶段 2：搞数据
+**阶段 2：搞数据**
 
 DeepSeek-V3-Base 作为基座模型，使用**冷启动长思维链数据**进行 **SFT** 训练得到 **DeepSeek-R1-Dev1**。
 
 对于冷启动长思维链数据的收集，具体来说，他们首先收集了数千个高质量、多样化的推理提示。对于每个提示，使用 DeepSeek-R1-Zero 以 1.0 的相对较高 temperature 生成多个推理轨迹。接下来，过滤这些生成内容，只保留具有正确最终答案和可读格式的。对于数学输出，我们使用 sympy(https://www.sympy.org/) 进行解析和表达式比较；对于格式化，我们应用诸如重复检测和语言混合过滤之类的规则。最后，提示 DeepSeek-V3 来精炼推理和摘要，以确保正确的格式和人类友好的表达。特别是，为了解决语言混合问题，他们指示 DeepSeek-V3：“Translate the thinking process to the same language as the question.”。由于 DeepSeek-R1-Zero 的摘要仅提供最终答案，我们使用 Listing 1 中的摘要提示来生成一个简洁、易于人类阅读的解决方案，该解决方案概述了推理步骤和最终结果。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-14-产生人类可读回答的提示.png" />
-   <p>图14.14 产生人类可读回答的提示</p>
+  <img src="./images/14-14-产生人类可读回答的提示.png" alt="产生人类可读回答的提示" width="800">
+  <p><em>图 16. 产生人类可读回答的提示</em></p>
 </div>
 
 在 DeepSeek-R1-Dev1 的基础上，奖励信号使用基于规则的奖励（准确性+格式）和语言一致性奖励，进行 RL 训练得到 **DeepSeek-R1-Dev2**。
 
-##### 阶段 3：后训练
+**阶段 3：后训练**
 
 将 **DeepSeek-V3-Base** 作为基座模型，使用 **800k**（600k推理相关数据+200k非推理数据） 监督数据进行 **SFT** 训练得到 **DeepSeek-R1-Dev3**。
 
@@ -862,29 +826,29 @@ DeepSeek-V3-Base 作为基座模型，使用**冷启动长思维链数据**进�
 
 在 DeepSeek-R1-Dev3上继续进行 RL，对于推理数据使用基于规则的奖励；通用数据由于没有一个明确的对错规则奖励信号，采用 Reward Models 来捕捉复杂且细致场景中的人类偏好，从 helpful 和 safety 两个角度计算奖励。
 
-##### DeepSeek-R1 效果如何呢？
+**DeepSeek-R1 效果如何呢？**
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-15-DeepSeek-R1和其他模型的比较.png" />
-   <p>图14.15 DeepSeek-R1和其他模型的比较</p>
+  <img src="./images/14-15-DeepSeek-R1和其他模型的比较.png" alt="DeepSeek-R1和其他模型的比较" width="800">
+  <p><em>图 17. DeepSeek-R1和其他模型的比较</em></p>
 </div>
 
-##### 蒸馏：我们可以将非推理模型转换为推理模型吗？
+**蒸馏：我们可以将非推理模型转换为推理模型吗？**
 
 R1 的另一个巨大贡献是证明了**大模型的推理能力可以蒸馏给小模型**。使用 R1 生成的 800k 条数据微调 Qwen2.5，让学生模型（Qwen2.5）学会教师模型（R1）的推理能力！
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-16-Deepseek-R1蒸馏模型和其他模型的比较.png" />
-   <p>图14.16 Deepseek-R1蒸馏模型和其他模型的比较</p>
+  <img src="./images/14-16-Deepseek-R1蒸馏模型和其他模型的比较.png" alt="Deepseek-R1蒸馏模型和其他模型的比较" width="800">
+  <p><em>图 18. Deepseek-R1蒸馏模型和其他模型的比较</em></p>
 </div>
 
-##### 使用少量高质量 SFT 样本提升数学推理能力
+**使用少量高质量 SFT 样本提升数学推理能力**
 
 除了 Deepseek-R1 这种范式可以得到一个强大的推理模型外，我们直接使用 Base+SFT 也可以得到一个性能不错的推理模型。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-17-s1使用1k高质量样本提高数学推理能力.png" />
-   <p>图14.17 s1使用1k高质量样本提高数学推理能力</p>
+  <img src="./images/14-17-s1使用1k高质量样本提高数学推理能力.png" alt="s1使用1k高质量样本提高数学推理能力" width="800">
+  <p><em>图 19. s1使用1k高质量样本提高数学推理能力</em></p>
 </div>
 
 李飞飞团队的文章[s1: Simple test-time scaling](https://arxiv.org/pdf/2501.19393)使用 1k 个高质量、带有长思维链的数据，在 Qwen2.5-32B-Instruct 上进行 SFT 从而获得了强大的数学推理能力。
@@ -892,22 +856,22 @@ R1 的另一个巨大贡献是证明了**大模型的推理能力可以蒸馏给
 上海交通大学的刘鹏飞团队在[LIMO: Less is More for Reasoning](https://arxiv.org/pdf/2502.03387)中也得到了相似的结论，使用 800 个高质量个高质量、带有长思维链的数据，在 Qwen2.5-32B-Instruct 上进行 SFT 大大提高了模型的数学推理能力。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-18-limo使用800高质量样本提高数学推理能力.png" />
-   <p>图14.18 s1使用1k高质量样本提高数学推理能力</p>
+  <img src="./images/14-18-limo使用800高质量样本提高数学推理能力.png" alt="s1使用1k高质量样本提高数学推理能力" width="800">
+  <p><em>图 20. s1使用1k高质量样本提高数学推理能力</em></p>
 </div>
 
 > 但需要注意的是，通过少量样本来提高模型推理能力对于基座模型的能力要求比较高，上述结果在 Qwen2.5-32B-Instruct 效果较好，但是在 Qwen2.5-7B-Instruct 和 Qwen2.5-3B-Instruct 上效果较差。
 
-##### 使用少量高质量样本进行 RL提升数学推理能力
+**使用少量高质量样本进行 RL提升数学推理能力**
 
 通过 Base+RL 这种路线同样可以获得推理模型，除了 Deepseek-R1-Zero外，[LIMR](https://arxiv.org/abs/2502.11886)（Qwen2.5-Math-7B+PPO）和[Less is More: Improving LLM Alignment via Preference Data Selection](https://arxiv.org/abs/2502.14560)（llama3-8B+DPO）两篇工作也证明了这条路线的可行性。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-19-limr与其他模型的性能比较.png" />
-   <p>图14.19 limr与其他模型的性能比较</p>
+  <img src="./images/14-19-limr与其他模型的性能比较.png" alt="limr与其他模型的性能比较" width="800">
+  <p><em>图 21. limr与其他模型的性能比较</em></p>
 </div>
 
-##### 不成功的尝试
+**不成功的尝试**
 
 Deepseek-R1 团队也分享了他们在 DeepSeek-R1 开发的早期阶段，做的一些失败的尝试：
 
@@ -916,22 +880,20 @@ Deepseek-R1 团队也分享了他们在 DeepSeek-R1 开发的早期阶段，做�
 - 判断当前中间步骤是否正确的挑战性。自动标注一个中间步骤的正确性往往不可靠，人工标注规模难以扩展，难以在大规模训练中落地。
 - 引入模型后易产生奖励黑客行为，且成本高。一旦引入基于模型的奖励，模型可能找到作弊路径来提升奖励，从而偏离真实目标；另外，重新训练奖励模型需要额外的算力和数据，增加训练管线的复杂度和成本。
 
+**蒙特卡洛树搜索（MCTS）**：受 AlphaGo 和 AlphaZero 的启发，他们探索了使用蒙特卡洛树搜索（MCTS）来增强测试时计算的可扩展性。 这种方法涉及将答案分解成更小的部分，以允许模型系统地探索解空间。 为了实现这一点，提示模型生成多个标签，这些标签对应于搜索所需的特定推理步骤。
 
- **蒙特卡洛树搜索（MCTS）**：受 AlphaGo 和 AlphaZero 的启发，他们探索了使用蒙特卡洛树搜索（MCTS）来增强测试时计算的可扩展性。 这种方法涉及将答案分解成更小的部分，以允许模型系统地探索解空间。 为了实现这一点，提示模型生成多个标签，这些标签对应于搜索所需的特定推理步骤。
-
-- 与搜索空间相对明确的国际象棋不同，token 生成呈现出指数级更大的搜索空间。 为了解决这个问题，我们为每个节点设置了最大扩展限制，但这可能导致模型陷入局部最优。 
-- 其次，价值模型直接影响生成质量，因为它指导着搜索过程的每一步。 训练一个细粒度的价值模型本身就很困难，这使得模型难以进行迭代改进。 虽然 AlphaGo 的核心成功依赖于训练一个价值模型来逐步提升其性能，但由于 token 生成的复杂性，这一原理在我们当前的设置中难以复制。 
+- 与搜索空间相对明确的国际象棋不同，token 生成呈现出指数级更大的搜索空间。 为了解决这个问题，我们为每个节点设置了最大扩展限制，但这可能导致模型陷入局部最优。
+- 其次，价值模型直接影响生成质量，因为它指导着搜索过程的每一步。 训练一个细粒度的价值模型本身就很困难，这使得模型难以进行迭代改进。 虽然 AlphaGo 的核心成功依赖于训练一个价值模型来逐步提升其性能，但由于 token 生成的复杂性，这一原理在我们当前的设置中难以复制。
 
 总之，虽然 MCTS 在与预训练的价值模型配对时可以在推理过程中提高性能，但通过自我搜索迭代地提升模型性能仍然是一个重大挑战。
 
+### 4.2 Kimi k1.5
 
-### 14.3.2 Kimi k1.5
-
-#### 长思维链推理策略
+**长思维链推理策略**
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-20-Kimi-k1.5的长思维链结果.png" />
-   <p>图14.20 Kimi-k1.5的长思维链结果</p>
+  <img src="./images/14-20-Kimi-k1.5的长思维链结果.png" alt="Kimi-k1.5的长思维链结果" width="800">
+  <p><em>图 22. Kimi-k1.5的长思维链结果</em></p>
 </div>
 
 关键步骤：
@@ -939,7 +901,7 @@ Deepseek-R1 团队也分享了他们在 DeepSeek-R1 开发的早期阶段，做�
 - Long-CoT SFT
 - RL（使用它们自己的策略梯度损失）
 
-##### 数据管理
+**数据管理**
 
 RL 提示集（Prompt Set）的质量和多样性在确保强化学习的有效性方面起着关键作用。一个精心构建的提示集不仅能引导模型进行鲁棒推理，还能减轻奖励黑客和对表面模式过拟合的风险。具体来说，三个关键属性定义了一个高质量的 RL 提示集：
 
@@ -947,13 +909,13 @@ RL 提示集（Prompt Set）的质量和多样性在确保强化学习的有效�
 - 平衡的难度：提示集应包含易、中、难等不同难度问题的良好分布范围，以促进渐进式学习并防止对特定复杂程度的过拟合。采用一种基于模型的方法，该方法利用模型自身的能力来适应性地评估每个提示的难度。通过利用这种方法，可以预先过滤掉大多数非常简单的样本，并在 RL 训练期间轻松探索不同的采样策略。
 - 精确的可评估性：提示应允许验证者进行客观可靠的评估，确保模型性。为了避免潜在的奖励黑客，需要确保每个提示的推理过程和最终答案都可以被准确验证。实证观察表明，一些复杂的推理问题可能具有相对简单且易于猜测的答案，这会导致错误的正面验证——即模型通过错误的推理过程得出正确答案。为了解决这个问题，他们排除了容易出现此类错误的问题，例如选择题、判断题和证明题。此外，对于通用问答任务，我们提出了一种简单而有效的方法来识别和移除易于被黑客攻击的提示。具体来说，我们提示模型在没有任何 CoT 推理步骤的情况下猜测潜在答案。如果模型在 N 次尝试内预测出正确答案，则该提示被认为太容易被黑客攻击而被移除。他们发现设置 N = 8 可以移除大多数易于被黑客攻击的提示。
 
-##### 长思维链（Long-CoT）SFT
+**长思维链（Long-CoT）SFT**
 
 在模型进入复杂的强化学习阶段之前，通过监督微调，让模型初步学会并内化一套高质量、类似人类的复杂推理能力。这就像给模型进行“预热”，确保它在后续的 RL 训练中能更好地理解和利用奖励信号，生成有价值的推理过程。
 
 从精炼过的 RL 提示集（RL prompt set）中选取问题。利用“提示工程”（prompt engineering）技术，为这些问题构建出少量但高质量的“长 CoT 推理路径”。这些路径包含经过精确验证的推理步骤，适用于文本和图像输入。类似拒绝采样（RS），但其侧重点是通过精心设计的提示来“引导”模型生成长 CoT 推理路径，而非简单地从大量随机生成中选择最佳结果。通过以上步骤我们就构建好了一个用于 SFT 的数据集。
 
-##### Kimi RL
+**Kimi RL**
 
 我们希望最大化模型在参考答案上的期望奖励，同时不让模型偏离原始行为太多，目标函数为：
 
@@ -981,10 +943,9 @@ $$
 \frac{1}{k} \sum_{j=1}^{k} \left( \nabla_\theta \log \pi_\theta(y_j, z_j | x) \left( r(x, y_j, y^*) - \bar{r} \right) - \frac{\tau}{2} \nabla_\theta \left( \log \frac{\pi_\theta(y_j, z_j | x)}{\pi_{\theta_i}(y_j, z_j | x)} \right)^2 \right)
 $$
 
-
 对每个采样得到的 $(y_j, z_j)$，计算其梯度贡献。梯度由两部分组成：1. 奖励驱动的策略改进；2. 正则化驱动的行为约束。最后取平均（$\frac{1}{k} \sum$），得到最终更新方向。
 
-##### 长度控制
+**长度控制**
 
 Kimi 团队观察到一个“过度思考”现象，即模型响应的长度在 RL 训练期间显著增加。
 虽然这会带来更好的性能，但过长的推理过程在训练和推理时成本很高，而且过度思考通常不被人类所偏好。为了解决这个问题，他们引入了一个长度奖励来抑制 token 长度的快速增长，从而提高模型的 token 效率。
@@ -998,109 +959,165 @@ Kimi 团队观察到一个“过度思考”现象，即模型响应的长度在
 
 该长度惩罚机制鼓励模型在给出正确答案的同时，尽量生成简洁的响应。对于错误的答案，它绝不会给予任何正向的长度奖励，并且会对过长的错误答案施加额外的惩罚。
 
-
-#### 额外细节
+**额外细节**
 
 采样策略：
 - 为数据集分配难度标签，从易到难
-- 问题的采样比例与(1-success_rate)成正比，以避免重复已解决的问题 
+- 问题的采样比例与(1-success_rate)成正比，以避免重复已解决的问题
 
 奖励：
-- 对于代码——采用具有 ground truth 解的问题，生成新的测试用例 
-- 对于数学——使用800k个样本来训练一个CoT奖励模型，用于答案等价性检查 
+- 对于代码——采用具有 ground truth 解的问题，生成新的测试用例
+- 对于数学——使用800k个样本来训练一个CoT奖励模型，用于答案等价性检查
 
-#### Scaling 结果
+**Scaling 结果**
 
 Kimi-k1.5 在性能上与“o1”大致相当，甚至可能更优:
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-21-Kimi-k1.5与其他的方法的性能对比.png" />
-   <p>图14.21 Kimi-k1.5的长思维链结果</p>
+  <img src="./images/14-21-Kimi-k1.5与其他的方法的性能对比.png" alt="Kimi-k1.5的长思维链结果" width="800">
+  <p><em>图 23. Kimi-k1.5的长思维链结果</em></p>
 </div>
 
 其他有趣的结果：
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-22-Kimi-k1.5模型在不同基准测试上的训练准确率和长度的变化.png" />
-   <p>图14.22 Kimi-k1.5的长思维链结果</p>
+  <img src="./images/14-22-Kimi-k1.5模型在不同基准测试上的训练准确率和长度的变化.png" alt="Kimi-k1.5的长思维链结果" width="800">
+  <p><em>图 24. Kimi-k1.5的长思维链结果</em></p>
 </div>
 
-#### 消融实验
+**消融实验**
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-23-Kimi-k1.5和ReST用于策略梯度优化的比较.png" />
-   <p>图14.23 Kimi-k1.5和ReST用于策略梯度优化的比较</p>
+  <img src="./images/14-23-Kimi-k1.5和ReST用于策略梯度优化的比较.png" alt="Kimi-k1.5和ReST用于策略梯度优化的比较" width="800">
+  <p><em>图 25. Kimi-k1.5和ReST用于策略梯度优化的比较</em></p>
 </div>
 
 > 注意，上述分数来自一个内部的 long-cot 模型，其模型尺寸远小于 k1.5 long-CoT 模型
 
-
-### 14.3.3 Qwen 3：思维模式融合
+### 4.3 Qwen 3：思维模式融合
 
 Qwen3 家族最大型号的模型 Qwen3-235B-A22B 性能超过了 OpenAI-o1 和 Deepseek-R1，哪怕是 Qwen3-32B 也与 o1 性能相当。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-24-Qwen3和其他模型的性能比较.png" />
-   <p>图14.24 Qwen3和其他模型的性能比较</p>
+  <img src="./images/14-24-Qwen3和其他模型的性能比较.png" alt="Qwen3和其他模型的性能比较" width="800">
+  <p><em>图 26. Qwen3和其他模型的性能比较</em></p>
 </div>
 
 Qwen3 的后训练流程精心设计了两个核心目标：
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-25-Qwen3系列模型的后训练管道.png" />
-   <p>图14.25 Qwen3系列模型的后训练管道</p>
+  <img src="./images/14-25-Qwen3系列模型的后训练管道.png" alt="Qwen3系列模型的后训练管道" width="800">
+  <p><em>图 27. Qwen3系列模型的后训练管道</em></p>
 </div>
 
 - **思考控制**：这涉及两种不同模式的集成，即“非思考”模式和“思考”模式，使用户能够灵活选择模型是否进行推理，并通过指定思考过程的 token 预算来控制思考的深度
 - **强到弱蒸馏**：这旨在简化和优化轻量级模型的训练后流程。 通过利用大型模型的知识，大大降低了构建小型模型所需的计算成本和开发工作量。
 
-#### SFT + 推理强化学习 
+**SFT + 推理强化学习**
 
-我们现在都知道这个套路了，Qwen 也用了很多。 
+我们现在都知道这个套路了，Qwen 也用了很多。
 
-- 按难度过滤（通过 best-of-n，例如 kimi） 
-    - 移除模型在没有 CoT 的情况下就能正确回答的问题 
-    - 移除与验证数据过于相似的内容 
-- 手动过滤 CoT 的质量（猜测 vs 正确回答） 
+- 按难度过滤（通过 best-of-n，例如 kimi）
+    - 移除模型在没有 CoT 的情况下就能正确回答的问题
+    - 移除与验证数据过于相似的内容
+- 手动过滤 CoT 的质量（猜测 vs 正确回答）
 - 使用 GRPO 在仅 3995 个示例上进行强化学习
 
-#### Qwen 3 特有的新内容
+**Qwen 3 特有的新内容**
 
 思考模式融合——控制 CoT 的长度。
 
-1.混合带标签的非思考和思考数据
+1. 混合带标签的非思考和思考数据
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-26-思考模式融合阶段的SFT数据示例.png" />
-   <p>图14.26 思考模式融合阶段的SFT数据示例</p>
+  <img src="./images/14-26-思考模式融合阶段的SFT数据示例.png" alt="思考模式融合阶段的SFT数据示例" width="800">
+  <p><em>图 28. 思考模式融合阶段的SFT数据示例</em></p>
 </div>
 
 2. 通过特殊字符串的早停
 
 思考模式融合的一个额外优势是，一旦模型学会以非思考和思考模式进行响应，它自然会发展出处理中间情况的能力——根据不完整的思考生成响应。 这种能力为实现模型思考过程的预算控制奠定了基础。 具体来说，当模型的思考长度达到用户定义的阈值时，我们手动停止思考过程并插入停止思考指令：“考虑到用户的时间有限，我必须直接根据思考给出解决方案。\n`</think>`.\n\n”。 插入此指令后，模型将根据其迄今为止积累的推理生成最终响应。 值得注意的是，这种能力并非显式训练，而是通过应用思考模式融合自然产生的。
 
-#### 测试时间扩展（Test time scaling，TTS）
+**测试时间扩展（Test time scaling，TTS）**
 
 这张图表展示了在不同基准测试（AIME'24, AIME'25, LiveCodeBench (v5), GPQA Diamond）上，两种模式（“思考模式”和“非思考模式”）下的模型性能（Pass@1）如何随“思考预算”（Thinking Budget，以K tokens为单位）的变化而变化。
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-27-Qwen3-235B-A22B随thinking budget的性能表现.png" />
-   <p>图14.27 Qwen3-235B-A22B随thinking budget的性能表现</p>
+  <img src="./images/14-27-Qwen3-235B-A22B随thinking budget的性能表现.png" alt="Qwen3-235B-A22B随thinking budget的性能表现" width="800">
+  <p><em>图 29. Qwen3-235B-A22B随thinking budget的性能表现</em></p>
 </div>
 
-#### 不同阶段的组成 
+**不同阶段的组成**
 
 下图展示了 Qwen3-32B 模型在不同后训练阶段（Post-training）的性能变化：
 
 <div align="center">
-   <img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter14/images/14-28-Qwen3-32B在不同阶段的性能.png" />
-   <p>图14.28 Qwen3-32B在不同阶段的性能</p>
+  <img src="./images/14-28-Qwen3-32B在不同阶段的性能.png" alt="Qwen3-32B在不同阶段的性能" width="800">
+  <p><em>图 30. Qwen3-32B在不同阶段的性能</em></p>
 </div>
 
 需要注意的是，以通用为目的的 RLHF 对数学/STEM 能力会略有下降。
 
+## 5 总结与测试题
+
+### 5.1 课程总结
 
 Qwen 3 提出了 **Thinking Mode Fusion**，试图在一个模型中融合“思考”与“不思考”两种模式：
-*   **训练**: 混合使用带 `<think>` 的数据和直接输出答案的数据。
-*   **效果**: 用户可以通过 Prompt 控制模型是否进行长推理。
-*   **测试时计算 (Test-time Compute)**: 可以在推理阶段通过截断 `<think>` 过程来动态调整计算量和性能的平衡。
+-   **训练**: 混合使用带 `<think>` 的数据和直接输出答案的数据。
+-   **效果**: 用户可以通过 Prompt 控制模型是否进行长推理。
+-   **测试时计算 (Test-time Compute)**: 可以在推理阶段通过截断 `<think>` 过程来动态调整计算量和性能的平衡。
+
+### 5.2 测试题
+
+1.运用到大模型中，为什么我们改进之前的强化学习算法？
+
+## 参考资料
+
+- [PPO](https://spinningup.openai.com/en/latest/algorithms/ppo.html)
+- [37个PPO实现细节](https://iclr-blog-track.github.io/2022/03/25/ppo-implementation-details/)
+- [Implementation Matters in Deep Policy Gradients: A Case Study on PPO and TRPO](https://arxiv.org/abs/2005.12729)
+- [alpacafarm 中关于 PPO 的实现](https://github.com/tatsu-lab/alpaca_farm/blob/30717ddae735365de756ee2085191b491a71788d/src/alpaca_farm/rl/ppo_trainer.py)
+- [DeepSeekMath](https://arxiv.org/pdf/2402.03300)
+- [Deepseek-R1](https://arxiv.org/abs/2501.12948)
+- [nano-aha-moment](https://github.com/McGill-NLP/nano-aha-moment/blob/main/nano_r1_script.py)
+- [DeepSeek R1](https://arxiv.org/pdf/2501.12948)
+- [s1: Simple test-time scaling](https://arxiv.org/pdf/2501.19393)
+- [LIMO: Less is More for Reasoning](https://arxiv.org/pdf/2502.03387)
+- [LIMR](https://arxiv.org/abs/2502.11886)
+- [Less is More: Improving LLM Alignment via Preference Data Selection](https://arxiv.org/abs/2502.14560)
+- [DeepSeek R1](https://www.sympy.org/)
+
+## 缩写速查表
+
+
+| 缩写 | 英文全称 | 中文名 | 主要作用 |
+|------|----------|--------|----------|
+| **RL** | Reinforcement Learning | 强化学习 | 通过环境反馈的奖励信号优化策略，使模型逐步学会采取能够获得更高回报的行为。 |
+| **RLHF** | Reinforcement Learning from Human Feedback | 基于人类反馈的强化学习 | 通过收集人类偏好数据训练奖励模型，再使用强化学习微调大模型，使模型输出更符合人类价值观和预期，是当前对齐技术的核心框架。 |
+| **RLVR** | Reinforcement Learning from Verifiable Rewards | 基于可验证奖励的强化学习 | 利用可自动验证的客观信号（如数学题答案正确性、代码执行结果）作为奖励，无需人工标注，有效提升模型在推理、数学等领域的准确性。 |
+| **LLM** | Large Language Model | 大语言模型 | 以海量文本训练、能够理解和生成自然语言的模型，也是本章强化学习训练的主要对象。 |
+| **LM** | Language Model | 语言模型 | 根据上下文对下一个 token 建模并生成序列的模型；本章中的 Policy LM 是正在被优化的策略模型。 |
+| **CoT** | Chain of Thought | 思维链 | 让模型显式生成中间推理步骤，有助于提升复杂数学、代码和逻辑任务的推理能力。 |
+| **SFT** | Supervised Fine-Tuning | 监督微调 | 使用带有目标答案或示范推理过程的数据对预训练模型进行有监督训练，常用于 RL 之前的冷启动。 |
+| **DPO** | Direct Preference Optimization | 直接偏好优化 | 绕过显式奖励模型和在线强化学习，直接利用偏好数据优化策略的对齐方法。 |
+| **RM** | Reward Model | 奖励模型 | 根据任务目标或人类偏好为模型输出打分，为策略优化提供奖励信号。 |
+| **VM** | Value Model | 价值模型 | 估计给定状态未来能够获得的回报，在 PPO 中用于计算优势函数。 |
+| **PPO** | Proximal Policy Optimization | 近端策略优化 | 通过裁剪概率比率限制参数更新幅度，兼顾训练稳定性和样本效率，是 RLHF 最常用的底层算法之一。 |
+| **TRPO** | Trust Region Policy Optimization | 信任域策略优化 | 通过约束策略更新的 KL 散度，确保每次更新处于“信任域”内；它是 PPO 的前身，理论上更稳定但计算开销较大。 |
+| **GRPO** | Group Relative Policy Optimization | 组相对策略优化 | DeepSeek 提出的 PPO 改进方法，无需单独的价值网络，在组内通过相对奖励标准化来降低方差，减少显存占用并加速大模型训练。 |
+| **GAE** | Generalized Advantage Estimation | 广义优势估计 | 使用多个时间步的时序差分误差估计优势函数，在偏差和方差之间取得平衡，降低策略梯度的方差。 |
+| **TD** | Temporal Difference | 时序差分 | 根据即时奖励和下一状态的价值估计更新当前价值，是 GAE 和许多价值函数方法的基础。 |
+| **KL** | Kullback–Leibler Divergence | KL 散度 / 相对熵 | 衡量两个概率分布的差异，在 PPO 和 RLHF 中常用于约束策略不要偏离参考模型太远。 |
+| **MSE** | Mean Squared Error | 均方误差 | 衡量预测值与目标值之间平方误差的损失函数，本章用于训练价值模型。 |
+| **PRM** | Process Reward Model | 过程奖励模型 | 对中间推理步骤而非只有最终答案进行评分，为模型提供更细粒度的过程监督。 |
+| **MCTS** | Monte Carlo Tree Search | 蒙特卡洛树搜索 | 通过反复模拟和扩展候选路径搜索解空间，曾被探索用于增强推理模型的测试时计算。 |
+| **RFT** | Reinforcement Fine-Tuning | 强化微调 | 根据任务奖励对模型进行强化微调；本章中通常指只奖励最终答案是否正确的基础方法。 |
+| **PS** | Process Supervision | 过程监督 | 对解题过程或中间步骤提供监督信号，而不只评价最终答案。 |
+| **OS** | Online Sampling | 在线采样 | 在训练过程中动态采样并更新数据；本章的 GRPO+OS 指标准的在线采样设置。 |
+| **RMSD** | Root Mean Square Deviation | 均方根偏差 | 衡量预测蛋白质结构与真实结构之间差异的指标，用于说明 AlphaFold 中的可验证目标。 |
+| **TTS** | Test-Time Scaling | 测试时扩展 | 在推理阶段增加或调整计算预算（例如思考 token 数），以换取更高的任务性能。 |
+| **GSM8K** | Grade School Math 8K | 小学数学应用题数据集 | 包含约 8.5K 道小学数学文字题，常用于评估模型的数学推理能力。 |
+| **MATH** | MATH benchmark | 数学推理基准 | 覆盖高中竞赛数学等多种难度的数学题，用于评估更复杂的数学推理能力。 |
+| **AIME** | American Invitational Mathematics Examination | 美国数学邀请赛 | 高难度数学竞赛评测，常用于衡量推理模型的数学能力。 |
+| **GPQA** | Graduate-Level Google-Proof Q&A | 研究生水平问答基准 | 需要专业知识和深度推理的问答评测，题目设计为不易通过简单检索解决。 |
+
