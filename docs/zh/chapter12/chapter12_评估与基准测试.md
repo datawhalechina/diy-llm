@@ -72,7 +72,7 @@
 像 Artificial Analysis 这样的网站，就将模型的性能与每 token 的成本结合起来，绘制出帕累托前沿（Pareto Frontier）。这揭示了一个现实：顶级模型（如 O3）虽然强大，但价格昂贵；而一些排名稍后的模型，可能在性能和成本之间取得了更好的平衡。智能纵坐标的智能指数包含以下测试： MMLU-Pro、GPQA Diamond、Humanity's Last Exam、LiveCodeBench、SciCode、AIME 2025、IFBench、AA-LCR、Terminal-Bench Hard 和 𝜏²-Bench Telecom 。
 
 <div align="center">
-  <img src="./images/12-8-Intelligence vs Cost to Run Artificial Analysis Intelligence Index (12 Dec &#x27;25) .png" alt="不同模型在 Artificial Analysis 网站上的性能 vs 成本对比" width="800">
+  <img src="./images/12-8-Intelligence vs Cost to Run Artificial Analysis Intelligence Index.png" alt="不同模型在 Artificial Analysis 网站上的性能 vs 成本对比" width="800">
   <p><em>图 8. 不同模型在 Artificial Analysis 网站上的性能 vs 成本对比</em></p>
 </div>
 
