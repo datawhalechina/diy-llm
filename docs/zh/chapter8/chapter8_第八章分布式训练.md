@@ -1,76 +1,95 @@
-# 第八章分布式训练
-
-
-# 本节学习目标
+# 第 8 章 分布式训练
 
 在进入具体分析之前，我们先明确本节的关注重点。本节将围绕大语言模型分布式训练的核心并行策略与系统实现展开，主要包括：
 
-1. [理解多机多卡并行架构的必要性，掌握集体通信操作（All‑Reduce、Broadcast、All‑Gather、Reduce‑Scatter 等）的原理与成本模型](#81-llm网络的基础知识)
-2. [深入分析核心并行策略：数据并行（含 ZeRO/FSDP 显存优化）、模型并行（流水线并行与张量并行）等，理解各自的通信开销、内存收益与适用场景](#82-核心并行策略)
-3. [学习基于 PyTorch + NCCL 的分布式训练场景，包括集体通信的基准测试以及数据并行、张量并行、流水线并行的原理和实现](#83-多gpu并行优化与分布式训练系统实践基础)
-4. [了解 GPU 硬件互联层级（NVLink、NVSwitch、PCIe、）对通信带宽的影响](#84-硬件架构与通信层级)
-
 今天的重点将完全围绕跨机器的**并行性**展开。我们的目标是从优化单个GPU的吞吐量，转向理解训练超大规模模型所需的复杂性和细节。当模型规模变大时，单个GPU已无法容纳，因此需要将模型拆分到不同机器上，同时还要充分利用所有服务器资源来实现快速训练。我们将面临计算和内存两方面的挑战，还需要处理不同机器间的异构通信。GPU之间存在不同层级的通信方式，这将催生多种并行化范式。实际应用中人们会同时组合使用多种并行策略，我们将逐一讲解最主流的方案，然后探讨如何将它们组合起来高效训练超大模型。最后我会通过实际案例展示这些并行策略如何应用于大规模分布式训练。本章节大致分为三个部分：首先介绍网络基础原理，接着分析不同网络硬件如何对应各类并行化策略，最后通过案例研究展示整体协作机制。
 
-## 8.1 LLM网络的基础知识
+## 1 本章学习目标
 
-### 8.1.1 GPU的拓展背景
+学习完本章，应该能够明白这些问题：
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-1-GPU的算力增强曲线.png" width="800" alt="8-1-GPU的算力增强曲线">
+- 理解多机多卡并行架构的必要性，掌握集体通信操作（All‑Reduce、Broadcast、All‑Gather、Reduce‑Scatter 等）的原理与成本模型。
+- 深入分析核心并行策略：数据并行（含 ZeRO/FSDP 显存优化）、模型并行（流水线并行与张量并行）等，理解各自的通信开销、内存收益与适用场景。
+- 学习基于 PyTorch + NCCL 的分布式训练场景，包括集体通信的基准测试以及数据并行、张量并行、流水线并行的原理和实现。
+- 了解 GPU 硬件互联层级（NVLink、NVSwitch、PCIe、）对通信带宽的影响。
+
+## 2 LLM网络的基础知识
+
+### 2.1 GPU的拓展背景
+
+<div align="center">
+  <img src="./images/8-1-GPU的算力增强曲线.png" alt="8-1-GPU的算力增强曲线" width="800">
+  <p><em>图 1. GPU的算力增强曲线</em></p>
+</div>
 
 我们在GPU那章提到过GPU的算力增长曲线，虽然GPU算力的增长已经非常快了，但若想快速扩展计算和内存能力，单靠GPU是不够的，因为现在的大语言模型参数量的增长十分迅速，比如deepseek 671B需要的**显存已经是TB**级别的，算力更是一个天文数字，一张卡显得有些杯水车薪。虽然GPU内存也在增长，但单个GPU设备无法容纳如此庞大的模型。**下面这张图就体现了模型的尺寸变化（截至2022）**。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-2-模型的尺寸变化.png" width="800" alt="8-2-模型的尺寸变化">
+<div align="center">
+  <img src="./images/8-2-模型的尺寸变化.png" alt="8-2-模型的尺寸变化" width="800">
+  <p><em>图 2. 模型的尺寸变化</em></p>
+</div>
 
 我们需要的是**多机并行架构**，即使用**多张显卡**来共同训练模型，第一幅图中的右侧图表中的**绿色曲线**代表全球最快的超级计算机，其算力已达到百亿亿次级别。它正是当前训练顶尖大模型必须依赖的基础设施。
 
 **我们期望从多机扩展中获得线性内存扩展（最大模型参数随 GPU 数量增加而扩展）和线性计算扩展（模型 FLOPS 随 GPU 数量线性增加）**。
 
-### 8.1.2 多GPU、多机并行架构
+### 2.2 多GPU、多机并行架构
 
 所谓的多GPU，多机并行就是一个机器上搭载多个GPU，同时多个机器同时进行计算。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-3-多机并行.png" width="800" alt="8-3-多机并行">
+<div align="center">
+  <img src="./images/8-3-多机并行.png" alt="8-3-多机并行" width="800">
+  <p><em>图 3. 多机并行</em></p>
+</div>
 
 上面是GPTNeoX论文引用的示意图（虽然示例较旧，但原理适用于当前的H100机器），一个机器拥有多个GPU，八块GPU通过**高速互联与CPU连接**，底层**NVSwitch提供极快的机内互联**，但跨机通信必须经过网络交换机（图示紫色HDR InfiniBand 线），它是一个明显比NVLink慢的连接，数据的吞吐量明显慢八倍。这种硬件层级结构将直接影响我们实际采用的模型并行化方案。牢记：**单机内部的通信速度极快，而跨机通信则存在明显延迟。**
 
 当我们跨越多台机器时速度会变慢，而根据所使用的硬件类型，一旦我们超越（比如）256块联网的GPU，甚至可能出现更严重的减速。许多学过系统或网络课程的同学可能已经知道这一点，但这里还是简单回顾一下**集体通信操作**。
 
-### 8.1.3 集体通讯操作
+### 2.3 集体通讯操作
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-4-集体通讯操作.png" width="800" alt="8-4-集体通讯操作">
+<div align="center">
+  <img src="./images/8-4-集体通讯操作.png" alt="8-4-集体通讯操作" width="800">
+  <p><em>图 4. 集体通讯操作</em></p>
+</div>
 
-#### 1. All reduce操作（全归约）
+**All reduce操作（全归约）**
 
 假设有四台机器（四个节点），每台拥有自己的数据。我们需要在每个节点上执行归约操作（比如对所有输入求和），然后将**四个结果复制到每台机器上**，简单来说就是这个操作的**总通讯量大致是 All reduce数据量的两倍**。常见的 All-Reduce 实现（如 Ring All-Reduce）需要 2(Φ - Φ/N) 的通信量，在 N 较大时近似为 2Φ（即参数量 的 2 倍）。直观理解就是：每个 GPU 要把自己的数据发出去，同时接收别人的数据进行归约，最终再把结果收回来，所以发送和接收各一次，总共大约 2Φ。
 
 All-Reduce 操作可以等价地分解为 Reduce-Scatter + All-Gather。这两步的通信量加起来也正好等于一次 All-Reduce 的通信量（即 2 倍参数量）。理解这一等价关系非常重要，因为它是后续 ZeRO 优化器能够实现“免费”内存节省的理论基础，我们可以将原本单次完成的 All-Reduce 拆成两步，在中间插入额外的计算，而不增加总体通信成本。
 
-#### 2. Broadcast操作（广播）
+**Broadcast操作（广播）**
 
 这里以**节点2**的单个输入为例，将其**复制到所有其他节点。通信成本大致与输出总量成正比**。
 
-#### 3. Reduce操作（归约）
+**Reduce操作（归约）**
 
 将不同输入（这里是四个）求和后，**仅发送到一台机器**。
 
-#### 4. All Gather操作（全收集）
+**All Gather操作（全收集）**
 
 All Gather是指将节点0的参数子组件**复制**到所有节点，节点1/2/3也执行相同操作。每个节点处理不同参数分区，并将其复制到其他机器。它将所有节点的数据块拼接后，完整复制给每一个节点（与 AllReduce 的"聚合"不同，All Gather 只做"收集"不做"计算"）。
 
-#### 5. Reduce Scatter（归约分散）
+**Reduce Scatter（归约分散）**
 
 Reduce Scatter则是将各行数据求和后，仅将结果发送给节点0。即先对所有节点的数据进行归约计算，再将结果分块，每个节点只获得属于自己的那一部分。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-5-归约操作.png" width="800" alt="8-5-归约操作">
+<div align="center">
+  <img src="./images/8-5-归约操作.png" alt="8-5-归约操作" width="800">
+  <p><em>图 5. 归约操作</em></p>
+</div>
 
 All Gather和Reduce Scatter之所以重要，是因为它们本质上是构建众多并行化算法的**基础组件**。
 
 例如在执行All Reduce时：假设不同GPU（A/B/C/D）处理不同数据点，然后我们需要对梯度求和并传回所有GPU，这是典型的**四GPU数据并行操作**。但这个过程可以用Reduce Scatter和All Gather两个操作替代：前者对各行列求和后将结果分别留在GPU A到D，后者再将结果复制到其他GPU。在带宽受限场景下，这是最优方案。All Reduce的最高性能基本等同于Reduce Scatter加All Gather的带宽极限，通过对比两种操作的通信次数可以验证这一点。
 
-### 8.1.4 GPU和TPU
+### 2.4 GPU和TPU
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-6-GPU和TPU.png" width="800" alt="8-6-GPU和TPU">
+<div align="center">
+  <img src="./images/8-6-GPU和TPU.png" alt="8-6-GPU和TPU" width="800">
+  <p><em>图 6. GPU和TPU</em></p>
+</div>
 
 ---
 
@@ -94,7 +113,7 @@ GPU 互联采用 “胖树” 拓扑：节点内通过 NVSwitch 实现全互联�
 
 ---
 
-##  8.2 核心并行策略  
+## 3 核心并行策略
 
 我们需要重点考虑**三种并行策略**。
 
@@ -106,7 +125,7 @@ GPU 互联采用 “胖树” 拓扑：节点内通过 NVSwitch 实现全互联�
 
 当这三种并行策略协同工作时，我们就能获得在庞大机器集群上优雅地进行扩展计算。
 
-### 8.2.1 数据并行（Data Parallelism）
+### 3.1 数据并行（Data Parallelism）
 
 核心思想是复制模型，分片数据批次。
 
@@ -129,15 +148,21 @@ $\nabla f(x_i)$ 是函数 $f$ 在 $x_i$ 处的梯度。
 
 但是当前方案则完全未作优化内存。每个GPU都需要完整**复制参数和优化器状态**，这对内存扩展极为不利。实际训练中内存始终是瓶颈，我们都遇到过大模型加载到GPU时PyTorch报显存不足的错误。这直接影响训练效果，因此理想情况下需要节省内存。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-7-朴素数据并行中的内存使用情况.png" width="800" alt="8-7-朴素数据并行中的内存使用情况">
+<div align="center">
+  <img src="./images/8-7-朴素数据并行中的内存使用情况.png" alt="8-7-朴素数据并行中的内存使用情况" width="800">
+  <p><em>图 7. 朴素数据并行中的内存使用情况</em></p>
+</div>
 
 在普通的数据并行的内存使用，中我们需要存储大量模型副本，根据训练精度，每个参数约需**16字节存储空间**，**实际上需要保存约5个权重副本**。
 
 单从模型参数角度看，存储FP或者BF16理论上仅需2字节，还需要存储**梯度**（BF16精度下另需2字节）、**优化器状态**：SGD累积更新需要4字节主权重，Adam一阶矩估计需要4（或2）字节（用于记录历史梯度），二阶矩估计（梯度方差）又需4（或2）字节。
 
-#### ZeRO 解决DP（数据并行）的内存开销问题
+**ZeRO 解决DP（数据并行）的内存开销问题**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-8-ZeRO示意图.png" width="800" alt="8-8-ZeRO示意图">
+<div align="center">
+  <img src="./images/8-8-ZeRO示意图.png" alt="8-8-ZeRO示意图" width="800">
+  <p><em>图 8. ZeRO示意图</em></p>
+</div>
 
 **蓝色部分是参数占的内存，橙色是梯度，绿色是优化器状态的内存**
 
@@ -145,11 +170,17 @@ $\nabla f(x_i)$ 是函数 $f$ 在 $x_i$ 处的梯度。
 
 以分布在64个加速器上的75亿参数模型为例，其内存占用极其庞大，且总内存随GPU数量线性增长，这显然不可接受。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-9-优化器状态分片.png" width="800" alt="8-9-优化器状态分片">
+<div align="center">
+  <img src="./images/8-9-优化器状态分片.png" alt="8-9-优化器状态分片" width="800">
+  <p><em>图 9. 优化器状态分片</em></p>
+</div>
 
 参数和梯度跨设备复制是数据并行的必要环节，但**所有优化器状态不必存在于每台机器**上，即优化器状态分片。由上面的这张图可以看到，通过这种技术，总内存占用可从**120 GB 降至 31.4 GB**。若进一步对梯度分片，内存使用可压缩至16.6 GB。当参数也实施分片后，最终能将内存占用极致优化到1.9GB。这将是一个相当理想的状态，因为现在我们已经完全分片了所有需要的优化器状态、参数和梯度内存。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-10-ZeRO工作阶段1.png" width="800" alt="8-10-ZeRO工作阶段1">
+<div align="center">
+  <img src="./images/8-10-ZeRO工作阶段1.png" alt="8-10-ZeRO工作阶段1" width="800">
+  <p><em>图 10. ZeRO工作阶段1</em></p>
+</div>
 
 **第一步**：假设每个GPU获取不同的数据点。假设有 GPU0 到 4，每个GPU处理单个样本，并基于自有样本计算完整梯度。
 
@@ -161,17 +192,26 @@ $\nabla f(x_i)$ 是函数 $f$ 在 $x_i$ 处的梯度。
 
 这里的关键是我们正在进行reduce scatter和all gather。reduce scatter 加上 all gather的成本与all reduce相同。我们之前在所有梯度上进行all reduce，以确保每个人的梯度同步，那花费了我们参数数量的2倍。我们可以在reduce scatter和all gather两个步骤之间进行一些计算。这给了我们相同的计算通信成本但是更多的计算操作。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-11-ZeRO工作阶段2.png" width="800" alt="8-11-ZeRO工作阶段2">
+<div align="center">
+  <img src="./images/8-11-ZeRO工作阶段2.png" alt="8-11-ZeRO工作阶段2" width="800">
+  <p><em>图 11. ZeRO工作阶段2</em></p>
+</div>
 
 接下来进一步扩展分片范围，将梯度分片。完整参数+分片梯度+分片优化器状态。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-12-ZeRO工作阶段2的工作流程.png" width="800" alt="8-12-ZeRO工作阶段2的工作流程">
+<div align="center">
+  <img src="./images/8-12-ZeRO工作阶段2的工作流程.png" alt="8-12-ZeRO工作阶段2的工作流程" width="800">
+  <p><em>图 12. 8-12-ZeRO工作阶段2的工作流程</em></p>
+</div>
 
 具体的过程是在反向计算梯度的过程中，每当完成某个层的梯度计算，就**立即将其发送到对应的GPU上**.所有计算节点各自持有批次数据分量，沿着计算图逐步反向计算。假设我们按层进行操作（各层被原子化分片到不同GPU），那么在反向计算图中每完成一个层的梯度计算后，立即调用归约操作将梯度发送给对应工作节点。比如某个层属于2号GPU，我们就立即执行**归约操作**并发送给该节点。此时梯度数据就不再需要**保留**，因此不需要将梯度存储在0、1、3号计算节点上，可以**立即释放显存**，原因就是单个GPU无法累计保存所有梯度。
 
 如此循环往复，最终所有机器都会获得**完整更新的梯度**。现在每个机器都持有对应参数分量的完整梯度，也拥有对应参数分量的完整优化器状态，各自更新参数后再通过全收集操作整合参数。虽然看起来通信量有所增加（因为每层都要执行归约操作），但这仅涉及少量参数（毕竟已经分片），总体通信量保持不变。ZeRO第二阶段确实会产生额外开销（需要逐层同步确保梯度正确发送），但开销非常有限，整体实现仍然简洁直观。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-13-ZeRO工作阶段3.png" width="800" alt="8-13-ZeRO工作阶段3">
+<div align="center">
+  <img src="./images/8-13-ZeRO工作阶段3.png" alt="8-13-ZeRO工作阶段3" width="800">
+  <p><em>图 13. ZeRO工作阶段3</em></p>
+</div>
 
 最后来到ZeRO第三阶段，更复杂但收益也更大，现在**所有组件**（包括参数）都可以根据GPU数量进行**均分**，实现最大程度的内存节省。FSDP（全分片数据并行）本质上就是ZeRO第三阶段的具体实现。
 
@@ -179,7 +219,10 @@ $\nabla f(x_i)$ 是函数 $f$ 在 $x_i$ 处的梯度。
 
 FSDP最令人惊叹的是能以相对**较低的开销实现**。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-14-FSDP的原理.png" width="800" alt="8-13-ZeRO工作阶段3">
+<div align="center">
+  <img src="./images/8-14-FSDP的原理.png" alt="8-14-FSDP的原理" width="800">
+  <p><em>图 14. FSDP的原理</em></p>
+</div>
 
 上图揭示了**开销控制**的原理，我们将通过全收集操作动态整合模型权重，对于每一层单个GPU都不会拥有**全部参数**，不像常规做法那样直接让GPU0执行前向传播。假设GPU0仅持有最底层参数，它完成该层计算后就会暂停，并向所有其他工作节点**请求参数**。此时它会暂停并执行全收集操作（即图中标注的all gather 步骤），通过汇集所有参数获得执行前传所需的数据。随后它便能继续前传计算原本缺失的层，完成后立即释放权重数据。接着继续全收集下一层参数，执行前传并释放权重，如此循环往复。但激活值必须保留，导致激活内存不断增长，这最终会成为问题。
 
@@ -189,7 +232,10 @@ FSDP最令人惊叹的是能以相对**较低的开销实现**。
 
 FSDP最精妙之处在于其开销意外地低，尽管需要持续请求和传输参数，你可能认为这会导致严重延迟，但通过通信与计算重叠的核心设计，GPU能在后台通信的同时持续工作，类似预取机制。当需要某些数据时，它们早已传输就绪。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-15-FSDP的实际工作情况.png" width="800" alt="8-15-FSDP的实际工作情况">
+<div align="center">
+  <img src="./images/8-15-FSDP的实际工作情况.png" alt="8-15-FSDP的实际工作情况" width="800">
+  <p><em>图 15. FSDP的实际工作情况</em></p>
+</div>
 
 如上图所示 $(W_1 \cdot W_0 + W_2 \cdot W_0) x$ （假设输入为y）。当运行FSDP时，最终会得到如图所示的通信计算流程。**首先CPU会分派指令**，询问GPU的通信单元获取参数，同时指示 GPU 执行矩阵乘法，cpu会比GPU超前运行。
 
@@ -205,23 +251,29 @@ FSDP最精妙之处在于其开销意外地低，尽管需要持续请求和传�
 
 数据并行的并行成本为2乘参数量的通讯
 
-#### 下面分析ZeRO
+**下面分析ZeRO**
 
 从某种角度说，**ZeRO**的做法就是人们**高效实现分布式数据并行**的方式。阶段 1基本是**零成本**的，它采用与朴素数据并行相同的通信模式，但还能分片优化器状态。**ZeRO阶段2**的通讯的参数数量**是原来的两倍**，因此总带宽消耗相同，但在**反向传播过程中需要逐步释放梯度会带来额外开销**。**ZeRO阶段3**更为复杂，程序通信成本达到三倍，但实际表现不错。我们之前看到的图示中确实存在一些开销，但如果巧妙设计通信模式，效果其实相当理想。因此即使在网络连接较慢的情况下，人们仍会使用这种数据并行。这种方法的另一个优势在于数据并行对架构几乎没有任何特殊要求。所有细节都被高度抽象化了，这也解释了为何FSDP如此受欢迎，只需编写一个封装器就能并行化任意神经网络，无需深入理解架构的具体运作机制。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-16-ZeRO的实际工作情况.png" width="800" alt="8-16-ZeRO的实际工作情况">
+<div align="center">
+  <img src="./images/8-16-ZeRO的实际工作情况.png" alt="8-16-ZeRO的实际工作情况" width="800">
+  <p><em>图 16. ZeRO的实际工作情况</em></p>
+</div>
 
 这里有些具体案例。可以看到在8块A10080G显存的节点上能承载的最大模型规模,基线情况下仅能勉强容纳60亿参数模型，而使用ZeRO阶段3时则能承载约500亿参数模型。通过FSDP等智能内存优化技术，我们获得了承载更大模型的显著能力提升。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-17-批次大小存在边际效益.png" width="800" alt="8-17-批次大小存在边际效益">
+<div align="center">
+  <img src="./images/8-17-批次大小存在边际效益.png" alt="8-17-批次大小存在边际效益" width="800">
+  <p><em>图 17. 批次大小存在边际效益</em></p>
+</div>
 
 最后强调数据并行的关键：**批次大小**是核心限制因素。由于每台机器最多处理一个样本实例，数据并行度无法超过批次大小。当批次大小达到上限时，数据并行将无法继续扩展。大家可能会发现当批次大小**超过某个临界点**后，优化收益会出现明显递减。关于这个课题已经有很多论文发表。OpenAI有一篇很好的论文讨论临界批大小，他们基本观点是超过某个临界点后，每个训练样本对优化能力的贡献会出现急剧的收益递减。直观理解是：低于某个批大小时，梯度噪声很大，**此时减少噪声非常有益**；但达到某个程度后，根本限制因素就变成了**梯度更新次数而非方差缩减**。这意味着单纯的数据并行无法实现任意规模的并行化，**批大小**是非常重要的资源。本质上我们存在固定的最大批大小上限，但可以通过不同方式分配使用，因为其他类型的并行化同样受益于更大的批大小。我们需要在特定环节合理分配批大小。数据并行仍存在**固有局限：ZeRO第1/2阶段无法扩展内存**，第3阶段理论上不错但**运行缓慢**。更重要的是这与之前的问题相关，它无法减少**激活值内存**。
 
 最理想的情况是将模型完全分割成**独立部分**，这样激活内存也会随之减少。因此我们需要**更好的模型分割方案**，才能将超大规模模型装入GPU显存。这就引出了**模型并行**。我们的目标是保持批大小不变的前提下扩展内存容量，并找到不需要依赖大批量就能实现并行化的新维度。具体实现方式是将参数分布到多个GPU上，某种程度上类似ZeRO3，但不再传递参数而是传递激活值，这会产生关键差异，因为有时激活值会比参数小得多，这对我们非常有利。
 
-#### **数据并行的根本局限：临界批次大小**  
-数据并行需要消耗一项关键资源——**全局批次大小**。如果全局批次大小为 8，则数据并行度最多只能达到 8，无法继续扩展。 
+**数据并行的根本局限：临界批次大小**
 
+数据并行需要消耗一项关键资源——**全局批次大小**。如果全局批次大小为 8，则数据并行度最多只能达到 8，无法继续扩展。
 
 即使强行增大批次，也存在 **临界批次大小（Critical Batch Size）** 的限制：当批次大小超过某个阈值后，每个新增样本带来的优化收益会急剧递减。因为此时模型性能的制约因素已经从“梯度噪声”变成了“梯度更新步数”，继续增大批次并不等同于增加更多步的 SGD。
 
@@ -229,23 +281,32 @@ FSDP最精妙之处在于其开销意外地低，尽管需要持续请求和传�
 
 ---
 
-### 8.2.2 模型并行（Model Parallelism）
+### 3.2 模型并行（Model Parallelism）
 
 模型并行的核心思想就是讲参数分布在多个GPU上，就像ZeRO3,但是通讯的是激活值而不是参数。
 
 我们会介绍两种模型并行方式：**流水线并行**概念简单但实现复杂，**张量并行**概念较隐晦但实现更优雅且应用更广泛。它们对应着**两种不同的模型分割方法**。
 
-#### 1. 流水线并行（Pipeline Parallelism）
+**流水线并行（Pipeline Parallelism）**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-18-逐层并行.png" width="800" alt="8-18-逐层并行">
+<div align="center">
+  <img src="./images/8-18-逐层并行.png" alt="8-18-逐层并行" width="800">
+  <p><em>图 18. 逐层并行</em></p>
+</div>
 
 **流水线并行**可能是最直观的神经网络分割方式。深度神经网络由多层组成，我们很自然就会想到**按层边界进行切割**，每个GPU处理部分层，通过传递激活值进行通信。这种情况下每层专属一个GPU，GPU之间正向传递激活值，反向传播时从3号GPU向0号GPU回传梯度。这方案看似完美，但问题在于大多数GPU大部分时间处于**闲置状态**，利用率极其**低下**，因为是逐层的，在上一层的激活值没有算完之前，后面的层数的GPU都在等待。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-19-层状并行的问题.png" width="800" alt="8-19-层状并行的问题">
+<div align="center">
+  <img src="./images/8-19-层状并行的问题.png" alt="8-19-层状并行的问题" width="800">
+  <p><em>图 19. 层状并行的问题</em></p>
+</div>
 
 如果采用这种朴素的并行方案：假设每层包含前向计算且仅处理单个样本，时间线图示会呈现这样的场景：上图中不同行代表不同层（对应不同GPU），横轴是时间维度。可以看到最左侧首先计算**第一层**，激活值传递至**第二层后GPU2开始工作**，依此类推。等到开始反向传播时，会出现巨大的“空泡”，这段空白期完全不进行计算，GPU有效工作时间仅占1/n。所以在某种意义上，这可能实现的最差并行方案了，虽然增加了4块GPU，但获得的吞吐量却和单块GPU相当。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-20-流水线架构.png" width="800" alt="8-20-流水线架构">
+<div align="center">
+  <img src="./images/8-20-流水线架构.png" alt="8-20-流水线架构" width="800">
+  <p><em>图 20. 流水线架构</em></p>
+</div>
 
 因此可以采取更巧妙的处理方式：构建流水线架构。不再简单按层切分任务，而是**创建需要每块GPU按序处理的任务序列**。假设现在有一个微批次，每台机器处理四个样本。当完成第一个数据点的处理后，可以立即将其激活值发送给第二块GPU，然后立即开始处理第二个数据点。这样就实现了通信与计算的叠加——在第一块GPU持续工作的同时，第二块GPU也能开始工作。通过增大批次尺寸，可以有效缩小流水线中的空闲时段（气泡）。这也能解释为何之前将批次尺寸称为资源：在固定批次尺寸下进行流水线并行时，既可以利用它缩小流水线气泡，也可以用于数据并行。单一批次尺寸可以通过不同方式进行多重划分。微批次尺寸实际上控制着气泡时长。具体而言，系统开销与有效计算量的比值等于流水线阶段数的负一次方除以微批次数量。当批次尺寸足够大时，流水线并行可能实现高效运行。但如前所述，批次尺寸存在上限，无法任意扩大。
 
@@ -256,21 +317,27 @@ FSDP最精妙之处在于其开销意外地低，尽管需要持续请求和传�
 
 对于TPU（如Google TPU v4）采用高带宽的环形/网格互联，使得大规模集群中的All-Reduce和跨设备通信更加高效，从而在实践中更有利于DP和TP的高效扩展。然而，并行策略的选择不仅取决于模型规模与显存约束，还受到通信开销（带宽与延迟）的重要影响。**PP主要用于在单设备或张量并行无法容纳模型时进行模型切分，其通信模式为相邻阶段之间的点对点传输，对网络拓扑相对不敏感（在TPU和GPU等架构中均适用）。**
 
->在TPU、GPU集群等大规模训练系统中，尽管GPU集群的互联带宽通常低于TPU Pod，但PP还是通常会是作为一种补充方案，与DP和TP（layer通信，后续会有介绍）结合使用。*比如，在节点内利用高速互联主要执行TP，而在节点间通过PP减少跨节点的全局通信开销，从而在内存、通信与并行效率之间取得平衡*。相比之下，PP将模型按层划分为多个阶段，并以流水方式执行，不同阶段之间存在前后依赖关系，从而限制了整体并行度，其中的“气泡”现象正是这种阶段依赖在执行过程中的体现。
+> 在TPU、GPU集群等大规模训练系统中，尽管GPU集群的互联带宽通常低于TPU Pod，但PP还是通常会是作为一种补充方案，与DP和TP（layer通信，后续会有介绍）结合使用。*比如，在节点内利用高速互联主要执行TP，而在节点间通过PP减少跨节点的全局通信开销，从而在内存、通信与并行效率之间取得平衡*。相比之下，PP将模型按层划分为多个阶段，并以流水方式执行，不同阶段之间存在前后依赖关系，从而限制了整体并行度，其中的“气泡”现象正是这种阶段依赖在执行过程中的体现。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-21-批次尺寸和利用率关系.png" width="800" alt="8-21-批次尺寸和利用率关系">
+<div align="center">
+  <img src="./images/8-21-批次尺寸和利用率关系.png" alt="8-21-批次尺寸和利用率关系" width="800">
+  <p><em>图 21. 批次尺寸和利用率关系</em></p>
+</div>
 
 上图是NVIDIA论文中的实例：当批次尺寸为8时，随着流水线并行设备数量的增加，单GPU利用率**急剧下降**；而当批次尺寸达到128时，即使采用较大规模的流水线并行，仍能保持较高利用率。这说明**批次尺寸对掩盖气泡时长至关重要**。
 
 当然还可以采用更先进的流水线调度策略，通过将计算图细分为**更精细的阶段**，将**不同子层分配至不同设备**，在**不同时段执行不同计算**，从而实现更好的**流水线交错**。
 
-##### **零气泡流水线的原理**  
+**零气泡流水线的原理**
 
 特别值得关注的是**零气泡流水线技术**（在DeepSpeed中称为**双流水线**），其核心技巧在于：在反向传播计算梯度时，将其**分解为两个组件**，一是沿残差连接反向传播激活值，即计算关于激活值的导数；二是计算梯度。
 
 **1F1B 调度策略（One Forward, One Backward）**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-22-其他的流水线策略.png" width="800" alt="8-22-其他的流水线策略">
+<div align="center">
+  <img src="./images/8-22-其他的流水线策略.png" alt="8-22-其他的流水线策略" width="800">
+  <p><em>图 22. 其他的流水线策略</em></p>
+</div>
 
 1F1B 是流水线并行中最经典的调度策略之一，由 NVIDIA 在 Megatron-LM 中提出，专门用来解决朴素流水线并行（如 GPipe）的两个致命缺陷：**激活内存随微批次数量线性增长**和**流水线气泡过大**。
 
@@ -301,18 +368,18 @@ FSDP最精妙之处在于其开销意外地低，尽管需要持续请求和传�
 
 1F1B 将气泡从 GPipe 的“整个前向阶段 + 整个反向阶段”压缩为流水线首尾的固定小气泡。但由于前向和反向计算时间通常不对称（前向耗时通常短于反向），且受限于固定的交替节奏，气泡无法完全消除。这正是后续**零气泡技术**继续优化的方向——通过将反向拆分为 B（梯度传播）和 W（权重梯度计算），把可延迟的 W 填入这些残存气泡中。
 
+**更进一步的做法**
 
-##### 更进一步的做法
+传统流水线调度即使采用 1F1B，仍会有气泡。更进一步的做法是将反向传播拆成两个部分：
 
-传统流水线调度即使采用 1F1B，仍会有气泡。更进一步的做法是将反向传播拆成两个部分：  
-
-**B（Backward）**：计算损失对激活值的导数，并沿计算图向更低层传播。这一步有严格的序列依赖，必须按顺序执行。  
-**W（Weight gradient）**：计算当前层权重的梯度。这是叶节点计算，没有下游依赖，**可以在任何时候进行**。  
+**B（Backward）**：计算损失对激活值的导数，并沿计算图向更低层传播。这一步有严格的序列依赖，必须按顺序执行。
+**W（Weight gradient）**：计算当前层权重的梯度。这是叶节点计算，没有下游依赖，**可以在任何时候进行**。
 因此，我们可以**优先快速完成所有 B 计算**，而把 W 计算推迟到原本会出现气泡的空闲时段。通过这种精细调度，流水线气泡几乎可以被完全填满，实现接近零空闲的利用率。DeepSpeed 中的“双流水线”即基于这一思想，实现极其复杂。
 
-
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-23-零气泡流水线技术.png" width="800" alt="8-23-零气泡流水线技术">
-
+<div align="center">
+  <img src="./images/8-23-零气泡流水线技术.png" alt="8-23-零气泡流水线技术" width="800">
+  <p><em>图 23. 零气泡流水线技术</em></p>
+</div>
 
 核心思路是从优化的**1F-1B流水线**开始，看到上图 图2的IFIB流水线调度，然后将其分解为两部分：这样就可以在原本会出现计算气泡的位置（那些白色闲置区域）插入W计算。通过**精确分析序列依赖关系**，最终能实现GPU计算资源的高效利用。
 
@@ -320,20 +387,25 @@ FSDP最精妙之处在于其开销意外地低，尽管需要持续请求和传�
 
 但关键在于这最右边的这部分（W），为权重计算梯度的这个环节，它其实可以在任何时候进行，因为它不存在依赖关系，因此可以将这个计算重新安排到计算图中的任意位置。具体操作时，你可以对存在序列依赖的部分采用标准的流水线并行处理。而任何仅用于更新参数的计算，都可以被重新调度到任意位置。这样我们就知道**F、B、W**的含义，就可以看到右侧的这部分。
 
-
 最近听到一个趣闻：某前沿实验室训练大语言模型时，团队中只有两个人真正理解流水线并行的基础设施实现。其中一人离职后，整个训练基础设施就只剩一个核心人员支撑。这类情况确实存在，虽然这里看起来简单，但是流水线并行在基础设施层面非常非常复杂，。
 
-#### 2. 张量并行（Tensor Parallelism）
- 
+**张量并行（Tensor Parallelism）**
+
 和流水线并行相比，张量并行简单得多，很多框架都能实现它，即使是训练超大规模模型的团队也主要依赖这种模型并行。
 
 我们的大部分操作都是**矩阵乘法**。在大模型中绝大多数计算和参数都来自**矩阵运算**。因此如果能够并行化矩阵乘法效果就会很好。张量并行的思路就是将大型矩阵乘法**分解成若干可并行计算的子矩阵**。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-24-矩阵乘法分割示例.png" width="800" alt="8-24-矩阵乘法分割示例">
+<div align="center">
+  <img src="./images/8-24-矩阵乘法分割示例.png" alt="8-24-矩阵乘法分割示例" width="800">
+  <p><em>图 24. 矩阵乘法分割示例</em></p>
+</div>
 
 比如顶部的矩阵乘法 $X \cdot A = Y$ ，我可以将 $X$ 和 $A$ 都切分成两半，分别计算子矩阵乘积后再求和，最终得到结果。概念上，流水线并行是沿着**网络深度（层维度）**进行切分，而张量并行则是沿着矩阵乘法的宽度维度进行划分。所以我们将把矩阵分解为子矩阵，然后进行部分求和。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-25-MLP示例.png" width="800" alt="8-25-MLP示例">
+<div align="center">
+  <img src="./images/8-25-MLP示例.png" alt="8-25-MLP示例" width="800">
+  <p><em>图 25. MLP示例</em></p>
+</div>
 
 上面是一个在多层感知机（MLP）中的示例，每个GPU处理大型MLP矩阵乘法的不同子矩阵，然后通过集体通信在需要时同步激活值。
 
@@ -343,13 +415,15 @@ FSDP最精妙之处在于其开销意外地低，尽管需要持续请求和传�
 
 这里的F和G就是**同步过程**，**正向传播执行一次全归约，反向传播也执行一次全归约**，只是位于计算图中的不同位置。通过这个示例可以看出，对于任何矩阵乘法运算，都可以通过分割矩阵实现跨设备并行计算。
 
-
-在张量并行的正反向传播中，有两个关键的同步点 f 和 g，且它们存在对偶关系：  
-**前向传播**：f 是 identity（直接复制输入），g 是 all-reduce（将各部分计算结果求和聚合）。  
-**反向传播**：g 变为 identity（梯度直接回传），f 变为 all-reduce（将不同设备上的局部梯度求和）。  
+在张量并行的正反向传播中，有两个关键的同步点 f 和 g，且它们存在对偶关系：
+**前向传播**：f 是 identity（直接复制输入），g 是 all-reduce（将各部分计算结果求和聚合）。
+**反向传播**：g 变为 identity（梯度直接回传），f 变为 all-reduce（将不同设备上的局部梯度求和）。
 理解这种对偶性是正确实现张量并行的关键，它决定了 all-reduce 操作在计算图中的具体位置。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-26-张量并行的条件.png" width="800" alt="8-26-张量并行的条件">
+<div align="center">
+  <img src="./images/8-26-张量并行的条件.png" alt="8-26-张量并行的条件" width="800">
+  <p><em>图 26. 张量并行的条件</em></p>
+</div>
 
 **但需要注意的是**，这种方法的**成本**较高，因为每层都存在**同步**的过程，在单次前向-反向传播中需要传输两倍残差激活值的数据量。因此张量并行这种简单直接的方法需要依赖**高速互联设备**。
 
@@ -361,9 +435,9 @@ FSDP最精妙之处在于其开销意外地低，尽管需要持续请求和传�
 
 还有就是我们可以同时使用两种并行策略。我们可以看到在大规模运行中经常使用**张量并行**，然后**流水线并行**通常在此基础上使用。据我所知，我知道的唯一只使用流水线并行而不使用张量并行的例子是DeepSeek V3。所以假设你有五台不同的机器，也许前20%的参数分布在一台机器的范围内，你使用张量并行。然后通过流水线并行进入第二台机器进行下一步。我们会在**机器内部使用张量并行**，在**机器之间结合数据和流水线并行**。基本上使用**流水线并行**是因为你的**模型无法完全装入内存**。如果整个模型能装入内存，我们只需使用**数据并行加张量并行**，或者甚至只使用数据并行。
 
-#### 3. 专家并行（Expert Parallelism）
+**专家并行（Expert Parallelism）**
 
-##### 与张量并行的对比
+**与张量并行的对比**
 
 专家并行与张量并行在概念上类似，都是把 MLP 拆分到多设备，并因此带来通信代价。但二者有本质区别：
 
@@ -373,7 +447,7 @@ FSDP最精妙之处在于其开销意外地低，尽管需要持续请求和传�
 
 正因如此，**NVIDIA Megatron 官方并行指南明确建议：在 EP 和 TP 之间，应优先选择专家并行（EP over TP）。**
 
-##### 通信模式
+**通信模式**
 
 专家并行的通信模式是 **All-to-All**。每个 MLP 层都需要根据路由结果，将 token 分发到不同设备上的专家，计算完成后还要把结果送回。整个过程对延迟极度敏感，因为所有设备都必须等 token 到达后才能开始计算。
 
@@ -382,24 +456,31 @@ FSDP最精妙之处在于其开销意外地低，尽管需要持续请求和传�
 **DeepSeek DPP**：DeepSeek 为 V3 开发的专家并行路由与分发库，深入底层 GPU 网络原语，甚至使用了 **未公开的 PTX 指令**（GPU 机器码）来进一步加速通信，以榨干最后一点性能。
 **NVIDIA Hybrid EP**：NVIDIA 开发的类似底层库，在硬件层面对专家并行分发进行高效实现。
 
-##### DP 与 EP 的副本约束
+**DP 与 EP 的副本约束**
 
 在数据并行与专家并行组合时，存在一个需要留意的约束。许多旧库的朴素做法是：让数据并行的副本与专家并行的分片完全重合。例如数据并行度为 8，就将 8 个专家分别放在这 8 个副本上，数据也在这 8 个副本上切分并路由。这样做很自然，但会**限制专家并行的最大规模**，并制约 DP 和 TP 的交互方式。现代方案往往需要更灵活的解耦设计。
 
-##### 注意力与 MLP 的解耦并行
+**注意力与 MLP 的解耦并行**
+
 MoE 只替换了 MLP 层，注意力层仍为稠密计算。这导致了一个矛盾：注意力需要较高的张量并行度来切分大矩阵，但 MoE 层若同时使用高 TP 和高 EP，矩阵会被切得极碎，利用率崩溃。
 
 因此，近年来出现了 **解耦策略**：为注意力层和 MoE 层配置不同的张量并行度。比如注意力层维持较高的 TP，而 MoE 层则采用较低的 TP 或完全不用 TP（由 EP 主导）。这种设计虽然更复杂，但能够在注意力、MoE 和数据并行之间取得最佳平衡，已在实际前沿模型中得到应用。
 
-#### 4. 序列并行
+**序列并行**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-27-内存小结.png" width="800" alt="8-27-内存小结">
+<div align="center">
+  <img src="./images/8-27-内存小结.png" alt="8-27-内存小结" width="800">
+  <p><em>图 27. 内存小结</em></p>
+</div>
 
 在某种意义上**内存是并行化的一个非常重要的部分**，因为我们**训练大模型**时实际上**激活**占用了内存使用的很大一部分。在标准的前向-后向传递中内存使用是非常动态的。在上图中可以发现在训练时内存总是会**有静态**的参数，这部分是不变的，在第零次迭代中，因为此时没有优化器状态，优化器那部分内存使用还不存在。但当前向和后向传递时，激活内存会逐渐增长，激活值在积累。当**开始后向传递**时，激活内存下降，因为激活值被使用并且释放，同时在积累梯度。所以**梯度内存使用上升**。**峰值**实际上出现在**后向传递还没有释放所有激活同时还在积累梯度**的某个阶段。
 
 这个图的意思是，我们已经考虑了所有其他部分；我们考虑了**参数**，考虑了**优化器状态**，考虑了梯度。但我们还没有**深入考虑激活**。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-28-激活内存的使用.png" width="800" alt="8-28-激活内存的使用">
+<div align="center">
+  <img src="./images/8-28-激活内存的使用.png" alt="8-28-激活内存的使用" width="800">
+  <p><em>图 28. 激活内存的使用</em></p>
+</div>
 
 张量和流水线并行可以线性减少大多数东西。但它实际上**不能减少所有的激活内存使用**。上面这张图来自NVIDIA一篇论文，讨论如何减少激活内存。一个非常有趣的点是：从左到右看，模型越来越大，如果采用激进的并行化策略，**参数和优化器状态内存可以保持不变**。但激活内存会**持续增长**，因为其中某些部分**无法实现彻底并行化**。无论有多少设备上都无法消除每个设备上激活内存的增长。
 
@@ -422,11 +503,10 @@ $s$ | 序列长度
 $t$ | 张量并行大小
 $v$ | 词汇表大小
 
-
 **序列并行的通信对偶性**
 
-序列并行沿序列维度分片 LayerNorm、Dropout 等轻量操作的激活。其通信模式与 FSDP 类似，也是一种“按需获取”：  
-- **前向传播**：使用 **All-Gather** 将分片的激活汇集为完整数据，完成计算。  
+序列并行沿序列维度分片 LayerNorm、Dropout 等轻量操作的激活。其通信模式与 FSDP 类似，也是一种“按需获取”：
+- **前向传播**：使用 **All-Gather** 将分片的激活汇集为完整数据，完成计算。
 - **反向传播**：使用 **Reduce-Scatter** 将梯度分发回各设备。
 
 结合张量并行和激活重计算（例如用 FlashAttention 消除 softmax 存储），每层激活内存可以降低到理论下界：
@@ -437,11 +517,10 @@ $$
 
 这是手动计算模型是否能装入 GPU 时的实用参考值。
 
-
 $sbh \cdot 34 + 5 as/h $ ,虽然看起来神秘，但其实很有规律：左边项 $sbh$ 来自MLP和其他逐点运算（即 $sbh×34$ 的由来），这些取决于残差流尺寸h；右边项实际是 $as^2b$ （h被约去），对应注意力机制中 $softmax$ 等二次项的内存需求。若使用flash Attention 和重计算技术则第二项内存可大幅削减。
 
-$$ 
-\text{Activations memory per layer} = sbh \left(10 + \frac{24}{t} + 5\frac{as}{ht}\right) 
+$$
+\text{Activations memory per layer} = sbh \left(10 + \frac{24}{t} + 5\frac{as}{ht}\right)
 $$
 
 $a$ ：注意力头的数量（number of attention heads）
@@ -455,19 +534,26 @@ $v$ ：词汇表大小（vocabulary size）
 
 假设全面实施张量并行（包括MLP、KQ计算和注意力运算），每层激活内存除以设备数t后效果显著，但仍有 $sbh \cdot 10$ 的残留项未被削减——这些对应LayerNorm、Dropout、注意力输入和MLP等非矩阵乘法组件。这些运算会随模型规模持续增长且难以并行化。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-29-序列并行.png" width="800" alt="8-29-序列并行">
+<div align="center">
+  <img src="./images/8-29-序列并行.png" alt="8-29-序列并行" width="800">
+  <p><em>图 29. 序列并行</em></p>
+</div>
 
 最后需要处理的是此前未并行的简单逐点运算。以层归一化为例，序列中不同位置的归一化互不干扰。假设序列长度为1024，可将其分割后由不同设备分别处理层归一化或Dropout操作。这些逐点运算现在可以完全沿序列维度分割，但需要同步机制来聚合并行计算结果，前向传播使用all-gather，梯度反向传播使用reduce-scatter，两者形成对偶关系。具体流程是：层归一化阶段分散数据后需重新聚合以执行标准计算，Dropout阶段则再次分散至并行组件。反向传播时按相反顺序执行。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-30-序列并行2.png" width="800" alt="8-30-序列并行2">
-
+<div align="center">
+  <img src="./images/8-30-序列并行2.png" alt="8-30-序列并行2" width="800">
+  <p><em>图 30. 序列并行2</em></p>
+</div>
 
 这个称为**序列并行**的方案本质是对此前未并行组件的最终优化。现在将所有模块整合，从完全无并行开始，先通过张量并行使所有非逐点运算内存除以t，再应用序列并行理念使剩余组件内存再次除以t，最终实现全面优化。然后我们可以做一些事情，比如激活重计算——这是FlashAttention的技巧——来消除第二项。你能够轻松实现的最小内存将是底部的这个公式：sbh34除以t。如果你在查看Transformer算术的不同公式，想知道使用了多少激活内存，就会经常会看到类似sbh34的表达式，并且如果有t个张量并行，就除以t，因为这是你能为那种内存轻松获得的最小值。
 
-### 8.2.3 其他的并行策略
+### 3.3 其他的并行策略
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-31-其他的并行策略.png" width="800" alt="8-31-其他的并行策略">
-
+<div align="center">
+  <img src="./images/8-31-其他的并行策略.png" alt="8-31-其他的并行策略" width="800">
+  <p><em>图 31. 其他的并行策略</em></p>
+</div>
 
 **上下文并行或环形注意力**，这本质上是一种拆分**计算和激活成本**的方法，用于计算非常大的注意力，基本上就是让键和值在不同的机器之间传递。所以每台机器**负责不同的查询Q**，然后键和值将以环形方式在机器之间传输，以计算**KQV内积**。
 
@@ -476,9 +562,12 @@ $v$ ：词汇表大小（vocabulary size）
 
 我们在FlashAttention中做过分块（tilling）。所以我们知道注意力可以以这种在线逐块的方式计算。
 
-### 8.2.4 总结
+### 3.4 总结
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-32-并行策略总结.png" width="800" alt="8-32-并行策略总结">
+<div align="center">
+  <img src="./images/8-32-并行策略总结.png" alt="8-32-并行策略总结" width="800">
+  <p><em>图 32. 并行策略总结</em></p>
+</div>
 
 所以简单回顾一下我们讨论过的所有内容，**我们有ZeRO1中的DDP，这有点像做的朴素数据并行**。每个批次有一些开销，没有内存扩展，带宽特性合理，但需要消耗批次大小才能做到这一点，我们需要**大的批次大小来实现大的数据并行**。
 
@@ -490,11 +579,17 @@ FSDP 虽然总通信量达到 3 倍参数量（比 DDP 多一次 All-Gather）�
 
 张量并行在带宽和需要进行的**同步量方面成本**非常高。但它有一个非常好的特性，就是对**批次大小没有影响**。所以这是一种可以使用的并行策略，因为它对全局批次大小方面没有成本。所以我们必须平衡一些有限的资源，比如内存、带宽和算力。批次大小则是一种**非传统的并且有限资源**。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-33-模型并行和张量并行.png" width="800" alt="8-33-模型并行和张量并行">
+<div align="center">
+  <img src="./images/8-33-模型并行和张量并行.png" alt="8-33-模型并行和张量并行" width="800">
+  <p><em>图 33. 模型并行和张量并行</em></p>
+</div>
 
 我们观察上面的图表，看出关键的量是**批次大小**。根据批处理大小与GPU数量的**比例**，不同的并行策略会达到**最优效果**。他们通过特定公式计算每种模型所需的通信量和计算量，这张图表就是基于简化公式生成的。可以明显看到当**批处理规模过小而GPU数量过多时**，系统效率必然低下，因为此时始终受限于通信瓶颈，即图表下半部分所示，大部分时间都耗费在通信上。随着批处理规模逐步增大，当结合使用FSDP（即ZeRO第三阶段）与张量并行(MP)时，最终能实现计算瓶颈状态。此时计算单元不再因等待**通信而浪费浮点运算能力**。当批处理规模足够大时，仅需**纯数据并行**即可满足需求，因为纯FSDP方案能使计算耗时显著高于通信耗时。这个示意图生动阐释了混合并行策略的价值；何时需要混合使用、为何批处理规模属于资源范畴。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-34-3D并行.png" width="800" alt="8-34-3D并行">
+<div align="center">
+  <img src="./images/8-34-3D并行.png" alt="8-34-3D并行" width="800">
+  <p><em>图 34. 3D并行</em></p>
+</div>
 
 当整合所有并行维度时，就构成了所谓的**3D或4D并行方案**（近期甚至出现了5D并行概念）。虽然第五维度的具体含义尚待考证，但现有维度组合已形成简明实用的经验法则，首要原则是**确保模型及激活值能被内存容纳**，这是训练的前提条件。当单机内存不足时，首先采用**张量并行**策略，在单机GPU数量范围内这是最高效的方案。随后根据流水线并行的适用性及带宽限制，跨机器采用**ZeRO3或流水线并行**直至模型完全载入内存。
 
@@ -502,25 +597,36 @@ FSDP 虽然总通信量达到 3 倍参数量（比 DDP 多一次 All-Gather）�
 
 **为具体说明，最后展示几个典型案例**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-35-Narayanan论文.png" width="800" alt="8-35-Narayanan论文">
+<div align="center">
+  <img src="./images/8-35-Narayanan论文.png" alt="8-35-Narayanan论文" width="800">
+  <p><em>图 35. Narayanan论文</em></p>
+</div>
 
 2021年论文中的可视化论证（附大量消融实验），以及去年部分模型的实践数据。这个参数规模从17亿到1万亿的模型训练表显示，所有方案都实现了**40%-52%的理论峰值浮点算力利用率**。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-36-3D并行的收益.png" width="800" alt="8-36-3D并行的收益">
+<div align="center">
+  <img src="./images/8-36-3D并行的收益.png" alt="8-36-3D并行的收益" width="800">
+  <p><em>图 36. 3D并行的收益</em></p>
+</div>
 
 可以清晰看到：张量并行从1开始逐步增至8后封顶；流水线并行初始为1，随着模型膨胀才逐步增加；数据并行规模则从最大值开始递减——因为流水线并行的增加本质上会消耗批处理容量。因此如果GPU在某种程度上被用于流水线并行就无法有效实现那么大的批次大小。所以精心设计的**3D并行策略能带来聚合浮点运算次数的线性增长**。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-37-张量并行的最优解.png" width="800" alt="8-37-张量并行的最优解">
+<div align="center">
+  <img src="./images/8-37-张量并行的最优解.png" alt="8-37-张量并行的最优解" width="800">
+  <p><em>图 37. 张量并行的最优解</em></p>
+</div>
 
 通过精细的3D并行配置，每块GPU能保持非常平稳的实际算力表现，这意味着增加GPU数量就能实现总吞吐量的线性扩展，这非常理想。张量并行设置为**8通常是最优解**。这里展示的是流水线并行规模与张量并行规模的对应关系。可以看到当张量并行设为8，配合128的批次大小时效果最佳。即使批次规模较小，**张量并行维度保持8仍然是最优选择**。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-38-激活值的重新计算.png" width="800" alt="8-38-激活值的重新计算">
+<div align="center">
+  <img src="./images/8-38-激活值的重新计算.png" alt="8-38-激活值的重新计算" width="800">
+  <p><em>图 38. 激活值的重新计算</em></p>
+</div>
 
 **而激活重计算技术则能支持更大的批次规模**。值得注意的是，更大的批次反过来有助于掩盖流水线并行的开销。因此激活重计算虽然会增加计算量，但其收益足以抵消成本。这个现象我们在FlashAttention中已经见证过。接下来谈谈近期大语言模型的实践方案。
 
 多篇论文来可以了解业界常用的并行化策略：
 **OLMo和Dolma论文**中描述他们对70亿参数模型采用全分片数据并行(FSDP)；**DeepSeek初代论文**使用ZeRO第一阶段配合张量序列与流水线并行，这正是我先前介绍的基础方案。而V3版本则略有不同：采用16路流水线并行+64路专家并行（本质是张量并行变体），数据并行策略采用ZeRO第一阶段。另一国产模型Yi再次使用ZeRO第一阶段配合张量/流水线并行；Yi-lightning因采用混合专家模型，用专家并行替代了张量并行。
-
 
 **首阶段小批次训练**是为保证稳定性，也可忽略。通过分析其并行策略设计逻辑，你会发现完全印证了我们的论述中的：**按带宽需求排序应优先配置TP -> C -> 流水线并行 -> DP**，因为数据并行能容忍较高网络延迟，支持异步获取分片模型参数。他们正是运用这套策略训练了某些顶级模型。
 
@@ -547,11 +653,14 @@ Gemma2也是是TPU的典型案例，他们采用近似FSDP的ZeRO第三阶段，
 | **OLMo 7B** | 纯 FSDP | 小模型仅用 FSDP 即可 |
 ---
 
-## 8.3 多GPU并行优化与分布式训练系统实践基础
+## 4 多GPU并行优化与分布式训练系统实践基础
 
-### 8.3.1 基础构建模块 
+### 4.1 基础构建模块
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-39-多GPU架构图.png" width="800" alt="8-39-多GPU架构图">
+<div align="center">
+  <img src="./images/8-39-多GPU架构图.png" alt="8-39-多GPU架构图" width="800">
+  <p><em>图 39. 多GPU架构图</em></p>
+</div>
 
 我们将探讨跨多GPU的并行化，大家脑海中应该有这样像上面一样的一个**架构图**。它拥有多个**节点**，这些本质上都是**计算机**，每台配备若干**GPU**，通常是8个，每个GPU内部包含**多个流式多处理器**（SM），实际计算工作由它们完成。图中**绿色部分**代表内存和通信组件，每个SM内部有极小的 L1 缓存，GPU上配备容量更大的高带宽内存（HBM），还有**连接不同GPU的互联链路（那些绿色的线）**。
 
@@ -563,7 +672,7 @@ Gemma2也是是TPU的典型案例，他们采用近似FSDP的ZeRO第三阶段，
 
 这次第一部分探讨基础构建模块，集体通信操作，包括NCCL和PyTorch中的实现方式，并进行基准测试；第二部分实际研究分布式训练中的数据并行、张量并行和流水线并行。
 
-### 8.3.2 集体通信原语   
+### 4.2 集体通信原语
 
 现在从集体通信操作开始。这些**原语**广泛用于分布式编程，“集体”意味着涉及多个节点。这些概念其实非常古老，至少可追溯到80年代的并行编程文献。相比自行管理点对点通信，它们提供了更优雅的抽象方案，是经过时间考验的可靠原语。
 
@@ -573,23 +682,38 @@ Gemma2也是是TPU的典型案例，他们采用近似FSDP的ZeRO第三阶段，
 
 **集体通信**操作包括：
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-40-广播机制.png" width="800" alt="8-40-广播机制">
+<div align="center">
+  <img src="./images/8-40-广播机制.png" alt="8-40-广播机制" width="800">
+  <p><em>图 40. 广播机制</em></p>
+</div>
 
 **广播（broadcast）** 指将某个rank上的张量t0分发到所有rank；
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-41-散射.png" width="800" alt="8-41-散射">
+<div align="center">
+  <img src="./images/8-41-散射.png" alt="8-41-散射" width="800">
+  <p><em>图 41. 散射</em></p>
+</div>
 
 **散射（scatter）** 类似，但将四个不同值分别发送到不同rank。所以每个rank获得不同的值，而不是相同的值。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-42-Gather.png" width="800" alt="8-42-Gather">
+<div align="center">
+  <img src="./images/8-42-Gather.png" alt="8-42-Gather" width="800">
+  <p><em>图 42. Gather</em></p>
+</div>
 
 **Gather**是scatter的逆操作，即每个rank拥有不同的值，然后将它们汇集到一个rank上。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-43-Reduce.png" width="800" alt="8-43-Reduce">
+<div align="center">
+  <img src="./images/8-43-Reduce.png" alt="8-43-Reduce" width="800">
+  <p><em>图 43. 8-43-Reduce</em></p>
+</div>
 
 **Reduce**与gather类似，区别在于不是拼接，而是对值进行相加。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-44-AllGather.png" width="800" alt="8-44-AllGathe">
+<div align="center">
+  <img src="./images/8-44-AllGather.png" alt="8-44-AllGather" width="800">
+  <p><em>图 44. AllGather</em></p>
+</div>
 
 **all_gather**与gather相同，区别在于它是为所有目标rank执行的。
 
@@ -597,21 +721,30 @@ Gemma2也是是TPU的典型案例，他们采用近似FSDP的ZeRO第三阶段，
 
 **all_gather**则是为所有rank执行。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-45-reduce_scatter.png" width="800" alt="8-45-reduce_scatter">
+<div align="center">
+  <img src="./images/8-45-reduce_scatter.png" alt="8-45-reduce_scatter" width="800">
+  <p><em>图 45. reduce_scatter</em></p>
+</div>
 
 **reduce_scatter**，这里复用上次的图类似于reduce，即取一组不同的值，对它们进行相加或其他可交换操作，并将结果放在一个等级上。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-46-all_reduce.png" width="800" alt="8-46-all_reduce">
+<div align="center">
+  <img src="./images/8-46-all_reduce.png" alt="8-46-all_reduce" width="800">
+  <p><em>图 46. all_reduce</em></p>
+</div>
 
 **all_reduce**等同于reduce加上all_gather。
 
 **reduce**仅表示你执行某种关联和可交换操作，如求和、最小值、最大值或平均值，**Broadcast/scatter**是gather的逆操作。而“all”仅表示目标为所有设备。希望这是对内容的复习。
 
-## 8.4 硬件架构与通信层级
+## 5 硬件架构与通信层级
 
-### 8.4.1 GPU的硬件架构
+### 5.1 GPU的硬件架构
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-47-典型的GPU硬件架构.png" width="800" alt="8-47-典型的GPU硬件架构">
+<div align="center">
+  <img src="./images/8-47-典型的GPU硬件架构.png" alt="8-47-典型的GPU硬件架构" width="800">
+  <p><em>图 47. 典型的GPU硬件架构</em></p>
+</div>
 
 从硬件开始。上面是**典型**的**GPU硬件架构**：在家庭环境中的一台电脑有CPU，在节点上有GPU通过PCI-E总线进行通信。如果需要在不同节点之间通过以太网进行通信。同一节点上的 GPU 通过 PCI(e) 总线（v7.0，16 通道 => 242 GB/s）进行通信，不同节点上的 GPU 通过以太网进行通信（~200 MB/s）。如果我们购买GPU用于游戏或其他用途，这是我们设置的样子。
 
@@ -619,13 +752,16 @@ PCI-E的数据仍然必须经过CPU，PCI-E是为诸如声卡、SSD或硬盘等�
 
 但是这并不理想，因为**有很多开销**。比如当数据需要从**GPU传输到GPU**时，它必须经过**内核**，复制到**缓冲区**，然后通过以太网传输，这引入了很多开销。因此在现代科学计算和深度学习中，如果把一堆GPU连接在一起并共同执行任务，我们会直接连接GPU。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-48-现代的数据中心.png" width="800" alt="8-48-现代的数据中心">
+<div align="center">
+  <img src="./images/8-48-现代的数据中心.png" alt="8-48-现代的数据中心" width="800">
+  <p><em>图 48. 现代的数据中心</em></p>
+</div>
 
 在**NVIDIA生态系统中，我们有NVLink直接连接GPU**，从而**绕过CPU**，不需要经过主机的内核，甚至跨节点时，我们也可以通过NVSwitch直接连接GPU。因此绕过了以太网。因为以太网是很久以前开发的，显然不是为这类应用设计的。所以NVSwitch和NVLink跳过了所有这些，直接为我们感兴趣的**工作负载类型**进行优化。
 
 如果你看H100，每个GPU有18个第四代NVLink。这提供了总共900GB的带宽。它肯定比PCI-E和以太网快得多。但是考虑到从**SM到读取高带宽内存的成本**，HBM 的内存带宽为 3.9 TB/s，那仍然快大约4倍左右。随着新的Blackwells推出还会增加两到三倍。
 
-### 8.4.2 NCCL
+### 5.2 NCCL
 
 NVLink仍然需要与CPU通信。每对GPU之间都有NV18连接，还有这些网卡之类的东西，网卡本质上就是提供PCI-E连接和CPU的部件。
 
@@ -635,8 +771,7 @@ NVLink仍然需要与CPU通信。每对GPU之间都有NV18连接，还有这些�
 
 它以库的形式提供。但NCCL的使用层级还是偏低，因为我们大部分工作都在Python中进行。因此PyTorch提供了 `torch.distributed` 库，本质上为这些集合操作提供了简洁接口。可以在 PyTorch 程序中轻松地编写all_gather等操作，张量就会自动出现在所有不同rank的进程中。它还有个很好的特性是支持多种硬件后端。特别要记住NCCL是用于GPU的，但集合操作并不局限于GPU，它适用于任何设备集合。还可以使用名为gloo的后端在CPU上运行。比如在笔记本电脑上调试作业时，即使没有GPU也能通过gloo正常运行。这就是拥有高层原语的另一个优势，它们比仅限于GPU特定功能的方案具有更好的可移植性。当然实际性能取决于硬件，但至少能确保代码在逻辑上正常运行。分布式库还支持其他高层功能如FSDP（上面讲过），
 
-
-#### 我们看几个torch.distributed集合操作的实际例子
+**我们看几个torch.distributed集合操作的实际例子**
 
 ```python
 spawn(collective_operations_main, world_size=4)
@@ -690,7 +825,7 @@ def collective_operations_main(rank: int, world_size: int):
 
 ```
 
-#### All-reduce
+**All-reduce**
 
 ```python
     # All-reduce
@@ -709,12 +844,14 @@ def collective_operations_main(rank: int, world_size: int):
 
 现在显示结果：
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-49-All_reduce打印结果.png" width="800" alt="8-49-All_reduce打印结果">
-
+<div align="center">
+  <img src="./images/8-49-All_reduce打印结果.png" alt="8-49-All_reduce打印结果" width="800">
+  <p><em>图 49. all_reduce打印结果</em></p>
+</div>
 
 rank 0 显示0123，rank 1显示 1234，以此类推。注意由于**异步执行**，所以打印顺序是**乱序**的。每个rank拥有不同的张量，然后执行 all_reduce操作，`dist.all_reduce(tensor=tensor, op=dist.ReduceOp.SUM, async_op=False)` 传入张量并指定求和操作。在这种情况下**不使用异步操作**，但可以采用**异步方式**，这对重叠通信和计算很有用。在all_reduce操作之后，正如打印出来的那样，对于第一个组件（前四行），它们相加得到6。后四行可以看到得到10、14和18。所以在all_reduce之后，这个张量基本上会被相应的和覆盖。使用起来非常非常简洁方便。
 
-#### Reduce-scatter
+**Reduce-scatter**
 
 ```python
 
@@ -730,12 +867,14 @@ rank 0 显示0123，rank 1显示 1234，以此类推。注意由于**异步执�
 
 现在来演示**reduce_scatter**。对于reduce_scatter创建一个维度为`world_size`的输入，这里`world_size`是4。然后会分配一个输出，因为reduce_scatter不会**原地操作**，输出将是一个标量。
 
-
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-49-reduce_scatter打印结果.png" width="800" alt="8-49-reduce_scatter打印结果">
+<div align="center">
+  <img src="./images/8-49-reduce_scatter打印结果.png" alt="8-49-reduce_scatter打印结果" width="800">
+  <p><em>图 50. reduce_scatter打印结果</em></p>
+</div>
 
 在 reduce_scatter 之前，数据是上图的前四行，输入和之前一样，输出碰巧是 0 ，但由于未初始化，它可以是任意值。执行reduce_scatter后，当传入输入和输出并执行求和时，结果是后四行，对于第一列，求和后结果放在rank0；第二列求和后放在rank1，依此类推。正如你所注意到的，它执行的操作与all_reduce相同，只是输出分散在所有不同的rank上。
 
-#### All-gather
+**All-gather**
 
 ```python
     
@@ -750,18 +889,18 @@ rank 0 显示0123，rank 1显示 1234，以此类推。注意由于**异步执�
 ```
 现在我们来演示 **all_gather**。我们将直接使用 reduce_scatter 的**输出作为输入**，然后为输出分配一个空数组。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-50-all_gather打印结果.png" width="800" alt="8-50-all_gather打印结果">
+<div align="center">
+  <img src="./images/8-50-all_gather打印结果.png" alt="8-50-all_gather打印结果" width="800">
+  <p><em>图 51. all_gather打印结果</em></p>
+</div>
 
 在all_gather之前（前四行），输出（output）是任意值。执行all_gather后（后四行），所有这些张量会出现在所有设备上。这只是一个示例。希望现在你完全相信reduce_scatter加上all_gather就等于all_reduce，因为计算出了与all_reduce完全相同的结果。
 
 最后当进程运行结束时，只需进行清理即可。
 
-## 8.5 基准测试
-
+## 6 基准测试
 
 到目前为止，我们讨论了这些集合通信操作，以及它们在PyTorch中的实现方式，涉及**NCCL和PyTorch**。现在让我们进行一些基准测试。
-
-
 
 ```python
 
@@ -794,12 +933,14 @@ def all_reduce(rank: int, world_size: int, num_elements: int):
     cleanup()
 ```
 
-
 以**all_reduce**为例,创建一个包含1亿个元素的张量，`world_size`为4。首先分配张量。需要注意的是，在进行基准测试时，必须小心清理环境。这里我先预热，即运行一次操作，然后同步并执行`dist.barrier() `.确保所有内核加载完毕且所需计算都完成。
 
 接着开始计时，执行all_reduce，再次同步后停止计时。下面可以查看耗时。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-51-打印耗时.png" width="800" alt="8-51-打印耗时">
+<div align="center">
+  <img src="./images/8-51-打印耗时.png" alt="8-51-打印耗时" width="800">
+  <p><em>图 52. all_reduce打印耗时</em></p>
+</div>
 
 这里应该使用微秒，使用毫秒不直观。不过执行得非常快。
 
@@ -818,7 +959,10 @@ def all_reduce(rank: int, world_size: int, num_elements: int):
 
 这里有个细节：实际发送/接收的字节数是多少？每个rank上的张量大小为`size_bytes`，需要发送给其他`world_size-1`个rank。但这里有一个系数2是因为在执行all_reduce操作（将所有不同的元素发送到同一个位置进行求和，然后结果需要返回给所有节点），所以每个计算节点需要先发送输入，再接收输出，这就是存在系数2的原因。因此总耗时为`world_size`乘以实际经过的时间。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-52-打印带宽结果.png" width="800" alt="8-52-打印带宽结果">
+<div align="center">
+  <img src="./images/8-52-打印带宽结果.png" alt="8-52-打印带宽结果" width="800">
+  <p><em>图 53. 打印带宽结果</em></p>
+</div>
 
 带宽就是字节数除以耗时,我们得到的结果是大约是每秒**277GB**。之前提到**H100**的带宽约为每秒**900GB**。实际性能会因**张量大小、设备数量等各种因素而异，存在多种变量**。所以实际性能可能有所不同，最好通过基准测试来确认实际获得的GB/s数值。
 
@@ -857,7 +1001,10 @@ reduce_scatter操作会非常类似，我们快速过一遍：我们创建了`wo
 
 我们来看带宽计算。这里发送字节数也存在系数2，因为 reduce_scatter 本质上是将输入发送到指定位置。如果只考虑reduce操作，所有元素会汇集到一处；而scatter意味着张量的不同部分会分发到不同位置，但本质上仍类似reduce操作。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-53-打印带宽结果2.png" width="800" alt="8-53-打印带宽结果2">
+<div align="center">
+  <img src="./images/8-53-打印带宽结果2.png" alt="8-53-打印带宽结果2" width="800">
+  <p><em>图 54. 8-53-打印带宽结果2</em></p>
+</div>
 
 按相同方式计算，这里得到的结果大约是70。不确定为什么恰好是70而不是其他数值，可能因为all_reduce通常会产生更多通信流量，且all_reduce可能经过更多优化。英伟达硬件有加速技术，能在实际网络中执行部分计算从而节省一半时间，但不确定这是否能完全解释此处的差异。
 
@@ -865,16 +1012,18 @@ reduce_scatter操作会非常类似，我们快速过一遍：我们创建了`wo
 
 通过对比可见，reduce_scatter和all_gather各自都不含2倍系数，两者叠加才产生2倍系数，这也印证了all_reduce需要两倍通信量。有关基准测试和集合操作的详细参考资料可供查阅。
 
-## 8.6 分布式训练
+## 7 分布式训练
 
 我们将通过深度MLP的简易实现来演示每种策略。需要注意的是，在Transformer中MLP通常是计算瓶颈而不是注意力机制。因此尽管架构简单，但能很好代表实际工作负载类型。
 
 首先从数据并行开始。需要说明的是，数据并行、张量并行和流水线并行可以理解为对模型或数据的不同划分方式，稍后会进行可视化展示。
 
-### 8.6.1 数据并行实践
+### 7.1 数据并行实践
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-54-假设模型有四层.png" width="200" alt="8-54-假设模型有四层">
-
+<div align="center">
+  <img src="./images/8-54-假设模型有四层.png" alt="8-54-假设模型有四层" width="800">
+  <p><em>图 55. 假设模型有四层</em></p>
+</div>
 
 在数据并行中，假设模型包含四个层，每个MLP层都是矩阵乘法运算。数据也是矩阵形式（批次维度×隐藏维度），数据并行会沿**批次维度**将数据切分成更小的分片，每个计算节点获得不同的数据切片。
 
@@ -934,7 +1083,10 @@ def data_parallelism_main(rank: int, world_size: int, data: torch.Tensor, num_la
 
 现在打印输出信息：
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-55-打印输出信息.png" width="800" alt="8-55-打印输出信息">
+<div align="center">
+  <img src="./images/8-55-打印输出信息.png" alt="8-55-打印输出信息" width="800">
+  <p><em>图 56. 打印输出信息</em></p>
+</div>
 
 在数据并行环境下，各节点的损失值确实不同（因为数据分布不同），但经过all_reduce操作后所有参数保持同步。这是机器学习中all_reduce操作的典型教科书应用。
 
@@ -942,7 +1094,7 @@ def data_parallelism_main(rank: int, world_size: int, data: torch.Tensor, num_la
 
 **总结DDP特性**：各计算节点的**损失值**不同，但通过**梯度归约实现参数同步**。本质上这是并行运行多个SGD实例，通过同步机制确保行为一致性。可以类比激活检查点技术，有时为了减少存储开销宁愿增加计算量。同理，虽然可以传输优化器状态，但直接更新优化器状态远比传输参数更高效。
 
-### 8.6.2 张量并行实践 
+### 7.2 张量并行实践
 
 接下来讲解张量并行。那么这里的情况是保持数据不变，要做的是沿着隐藏维度切割模型。每个计算节点将获得**所有层**，但只获得**每层的一部分**。最终我们将**传输所有数据和激活值**。
 
@@ -986,11 +1138,14 @@ def tensor_parallelism_main(rank: int, world_size: int, data: torch.Tensor, num_
 
 现在输出打印结果：
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter8/images/8-56-打印输出信息2.png" width="800" alt="8-56-打印输出信息2">
+<div align="center">
+  <img src="./images/8-56-打印输出信息2.png" alt="8-56-打印输出信息2" width="800">
+  <p><em>图 57. 打印输出信息2</em></p>
+</div>
 
 张量并行的前向传播生成完整尺寸的激活值，最终所有节点拥有相同的激活值。反向传播我暂且跳过，因为实现起来比较繁琐。
 
-### 8.6.3 流水线并行实践
+### 7.3 流水线并行实践
 
 现在来看流水线并行，它按层切割模型。所有rank获得该层的全部数据。
 
@@ -1060,13 +1215,11 @@ def pipeline_parallelism_main(rank: int, world_size: int, data: torch.Tensor, nu
 
 我们已经介绍了三种简单的并行化示例：**数据并行、张量并行和流水线并行**。当然这些是针对简单MLP网络的。实际应用中你们肯定希望用更复杂的模型（比如Transformer）来实现。我之前论证过，至少核心概念可以通过MLP来理解。不过显然在真实训练场景中，大家需要训练的是Transformer而非深层MLP。因此仍然需要实现完整的复杂逻辑。另外这里没有涉及通信与计算重叠的优化，当前实现并未仔细处理这一点。通常还需要通过更复杂的代码来维护状态记录。我建议大家参考Megatron-LM或PyTorch的FSDP实现。这些代码会相当复杂。以FSDP为例，如果要处理任意架构，就需要解析参数并维护大量状态记录，还要判断层结构等。而在MLP案例中，我们只是简单地按照特定方式分割模型。
 
-## 8.7 Jax、TPU 和总结
+## 8 Jax、TPU 和总结
 
 本课程全程使用PyTorch，但大家有必要了解围绕**Jax和TPU**构建的整个技术生态，其在某些方面颇具优势。Jax的核心思想是只需**定义模型和分片策略，编译器会自动处理后续工作**。斯坦福基于Jax开发了名为Levanter的工具包，通过Jax直接指定要分割的维度以及到TPU的映射关系，编译器就能自动编译出处理数据交换的底层原语。这比直接操作集合通信的抽象层级更高。
 
 Jax生态允许声明式定义模型，在Google的TPU系统内相当完善；而DeepSeek则处于另一个极端，需要深入NCCL层级进行优化来弥补GPU互联性能的不足。硬件利用方式实际上取决于所处的生态系统。PyTorch和Jax都提供了API来指定需要重新计算的部分，毕竟我们既不想全部重算也不想完全不重算。通常每隔几层设置，比如在大矩阵乘法之后。如果某个计算结果能轻松复现，存储一个版本就够了。不过我们坚持使用PyTorch是因为它能揭示底层运行机制。但在实际开发中，显然不需要从头实现所有这些功能。
-
-总结来说，我们已经了解了多种并行化方法。每种方法都可以看作沿着某个维度进行分割，可能是数据批次维度、宽度维度、深度维度或上下文长度维度。我们还反复看到计算策略的权衡，可以重计算，可以存储在内存中承担传输开销，在多GPU/多节点环境下甚至可以将数据存储在其它GPU内存中（通信速度更慢）。这些**方案需要权衡取舍**。通常重计算反而更优，但显然无法全部重算。实际场景往往受**通信或内存限制**。
 
 最后需要说明的是：虽然硬件在不断升级，但不要认为这些技术五年后就会过时，即便L1缓存或HBM内存容量增长，物理限制始终存在，模型规模总会突破硬件极限。这种层次化结构自计算机系统诞生之初就伴随我们，未来也将持续存在。
 
@@ -1079,6 +1232,15 @@ Jax生态允许声明式定义模型，在Google的TPU系统内相当完善；�
 **这些技术能否用于增量训练**
 
 比如获得新数据时，不仅能微调还能避免全量重算：可以，我们操作的基本单元就是梯度更新，半训练模型完全可以继续训练。
+
+## 9 总结与测试题
+
+### 9.1 课程总结
+
+总结来说，我们已经了解了多种并行化方法。每种方法都可以看作沿着某个维度进行分割，可能是数据批次维度、宽度维度、深度维度或上下文长度维度。我们还反复看到计算策略的权衡，可以重计算，可以存储在内存中承担传输开销，在多GPU/多节点环境下甚至可以将数据存储在其它GPU内存中（通信速度更慢）。这些**方案需要权衡取舍**。通常重计算反而更优，但显然无法全部重算。实际场景往往受**通信或内存限制**。
+
+### 9.2 测试题
+
 
 
 
