@@ -1,24 +1,24 @@
-# 第七章 GPU高性能编程
+# 第 7 章 GPU高性能编程
 
-# 本节学习目标
+在进入具体分析之前，我们先明确本节的关注重点。本节将围绕GPU高性能编程的核心方法与实践展开。
 
-在进入具体分析之前，我们先明确本节的关注重点。本节将围绕GPU高性能编程的核心方法与实践展开，主要包括：
+## 1 本章学习目标
 
-1. [回顾GPU硬件架构（SM、Warp、Block、Thread）与执行模型，理解算术强度、线程块调度等基础概念](#71-回顾gpu架构与执行模型)
-2. [掌握基准测试（Benchmarking）与性能分析（Profiling）的方法，学会使用PyTorch内置分析器及Nsight Systems等专业工具定位性能瓶颈](#72-性能分析方法)
-3. [深入理解内核融合（Kernel Fusion）的原理，并通过手写CUDA内核与Triton实现对比，体验从手动优化到高级抽象的性能提升](#74-内核融合kernel-fusion)
-4. [学习使用Triton编写高效GPU内核，理解其以块为中心的编程模型，并与PyTorch原生实现、手写CUDA进行性能对比](#75-triton)
-5. [了解`torch.compile`的自动优化能力及其适用场景，明确何时值得手写底层内核、何时依赖编译器](#76-torchcompil)
+学习完本章，应该能够明白这些问题：
 
-完成本章学习后，你将能够：系统掌握GPU性能分析与优化的完整工作流，了解基准测试、性能剖析到内核融合与Triton编程，能够针对简单的算子自主实现高效的GPU内核，并合理权衡手写优化与编译器自动优化的使用场景，从而在实际大模型训练与推理任务中显著提升计算效率。
+- 回顾GPU硬件架构（SM、Warp、Block、Thread）与执行模型，理解算术强度、线程块调度等基础概念。
+- 掌握基准测试（Benchmarking）与性能分析（Profiling）的方法，学会使用PyTorch内置分析器及Nsight Systems等专业工具定位性能瓶颈。
+- 深入理解内核融合（Kernel Fusion）的原理，并通过手写CUDA内核与Triton实现对比，体验从手动优化到高级抽象的性能提升。
+- 学习使用Triton编写高效GPU内核，理解其以块为中心的编程模型，并与PyTorch原生实现、手写CUDA进行性能对比。
+- 了解`torch.compile`的自动优化能力及其适用场景，明确何时值得手写底层内核、何时依赖编译器。
 
-## 7.1 回顾GPU架构与执行模型
+## 2 回顾GPU架构与执行模型
 
-### 7.1.1 GPU硬件架构（以A100/H100为例）
+### 2.1 GPU硬件架构（以A100/H100为例）
 
 以A100或H100为例，GPU包含大量**流式多处理器**（SM），每个SM内部有众多执行计算的处理单元比如**Int32或FP32单元**。每个SM会启动大量线程，内存层级结构包括**容量大但速度慢的DRAM（全局内存）**，以及更高速的缓存。特别要注意**寄存器文件**，这是每个线程都能访问的极高速存储器，在今天我们编写高性能GPU代码时将大量使用这些寄存器。
 
-#### 执行模型的基本结构
+**执行模型的基本结构**
 
 上一章讲过块（block）、线程束（warp）和线程（thread），这是粒度逐级细化的顺序。块是大型线程组，**每个块会被分配给一个SM处理**。可以把每个**SM想象成独立工作的单元，而块就是分配给它的处理单元**。在每个块内部**包含大量线程，每个线程代表待执行的任务单元**。这些线程在执行时会分组运行，这种分组称为线程束。每个线程束由32个连续编号的线程组成，从块中提取出来同步执行。
 
@@ -69,7 +69,7 @@ warp本质上是一组共同执行的线程。warp存在的意义在于这些线
 
 ---
 
-## 7.2 性能分析方法
+## 3 性能分析方法
 
 编写高性能代码的高层原则是必须先对代码进行**基准测试和性能分析**。因为常常会有学生或开发者主观认定**某个部分是瓶颈**，然后花三个小时去优化，结果发现根本不是瓶颈所在，这就浪费了许多时间。
 
@@ -77,7 +77,7 @@ warp本质上是一组共同执行的线程。warp存在的意义在于这些线
 
 我们希望大家能内化这个观念：**要编写高性能代码，就必须持续进行性能分析**。
 
-### 7.2.1 基准测试（Benchmarking）
+### 3.1 基准测试（Benchmarking）
 
 首先我们定义MLP模型，然后生成随机高斯分布输入，最后在5个步长中运行，每次计算前向传播后执行反向传播，最终返回MLP输出的平均值。这里甚至没有损失函数，简单到只是运行MLP前向传播并在最后进行平均池化。
 
@@ -131,11 +131,11 @@ def benchmarking_and_profiling():
 
 本章会一直使用这个基准测试函数，基准测试函数包含以下部分：**需要测试的运行函数、若干预热迭代次数、以及多次正式测试次数。**
 
-####  预热
+**预热**
 
 **首次运行PyTorch代码时会比迭代的时候慢很多**，因为首次运行代码会有**编译代码，向GPU发送指令**等各种初始化开销。预热能确保我们测量的是**稳定状态**下的速度而不是启动速度。当运行成千上万次迭代时，我们关心的正是稳定性能，而不是即时编译CUDA代码的速度。
 
-#### CUDA同步
+**CUDA同步**
 
 另一个重要点是调用 `torch.cuda.synchronize()` 。这是因为GPU和CPU是**两个独立的计算单元**，可以并行运行。我们的Python代码会在CPU上执行，当**运行相关计算时会向GPU分发CUDA内核**，此时CPU会继续执行后续代码而不等待GPU完成。这种特性虽然有利于编写高性能代码，但会给**基准测试**带来问题，如果GPU在异步执行而CPU在运行其他任务，就无法准确测量GPU执行时间，因为GPU是离线计算，**CPU不会等待GPU，而是继续执行代码，导致计时会提前结束**。
 
@@ -169,7 +169,7 @@ def benchmark(description: str, run: Callable, num_warmups: int = 1, num_trials:
 
 这就是我们的基准测试代码，记住两个关键点：**进行预热操作**，**调用CUDA同步**。如果忘记执行就可能会得到极其异常的数据（比如显示大型矩阵乘法瞬间完成，这显然不符合事实）。
 
-### 7.2.2 矩阵乘法的基准测试
+### 3.2 矩阵乘法的基准测试
 
 现在我们可以进行矩阵乘法的基准测试。我将逐步演示部分结果，虽然只是用数据验证已知结论，但希望通过具体演示确保理解一致。我们会在课程使用的**A100GPU**上运行测试，针对**不同尺寸的矩阵乘法进行测量**，系统收集了各个维度的矩阵乘法耗时数据。
 ```python
@@ -196,11 +196,14 @@ def benchmark(description: str, run: Callable, num_warmups: int = 1, num_trials:
 
 ```
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-1-矩阵运算时间.png" width="800" alt="7-1-矩阵运算时间.png">
+<div align="center">
+  <img src="./images/7-1-矩阵运算时间.png" alt="7-1-矩阵运算时间.png" width="800">
+  <p><em>图 1. 矩阵运算时间</em></p>
+</div>
 
 正如预期，随着矩阵尺寸增大，运行时间呈现**超线性增长**。不过在最小尺寸（如1024和2048）时，耗时基本没有增长，因为执行矩阵乘法存在**固定开销**，需要**将数据从CPU传输到GPU，启动内核也有开销，所以并非从零开始就一直保持超线性增长**。但当矩阵足够大时，确实观察到了预期的**缩放规律**。
 
-### 7.2.3 MLP的基准测试
+### 3.3 MLP的基准测试
 
 ```python
 def benchmarking():
@@ -254,7 +257,10 @@ def benchmarking():
 
 现在让我们尝试对**MLP**进行基准测试。具体操作是：将MLP扩展至256维，设置四层网络，批处理大小为256，执行两个训练步。测得耗时6.2秒(mlp_base)。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-2-缩放各种参数的规律.png" width="800" alt="7-2-缩放各种参数的规律">
+<div align="center">
+  <img src="./images/7-2-缩放各种参数的规律.png" alt="7-2-缩放各种参数的规律" width="800">
+  <p><em>图 2. 缩放各种参数的规律</em></p>
+</div>
 
 接着可以进行**基础扩展测试**：将训练步数从2逐步增加到5，分别进行基准测试。与矩阵乘法不同，当增加MLP的前向传播和反向传播次数时，运行时间应该呈线性增长，实际数据也印证了这一点，每次MLP执行约5秒，总体运行时间基本符合n×5秒的规律。同样地，当网络层数从2、3、4增加到5层时，运行时间也随之递增。这次仍然呈现线性增长趋势：单层运行约5秒（略少于5秒），总体耗时约为层数的四倍。再次验证了**线性缩放规律。**
 
@@ -262,7 +268,7 @@ def benchmarking():
 
 我们创建这个基准测试的函数，它进行少量预热操作，执行CUDA同步，并且能够测量我们所需的任何代码的运行时间。我们可以测量新架构的运行耗时。**但是基准测试是个粗粒度的测试工具**，它能告诉你代码运行缓慢，但无法指出**时间具体消耗在何处**。因此我们更倾向于**使用性能分析**这一个更加细粒度的测试。
 
-## 7.3 性能分析（Profiling）工具
+## 4 性能分析（Profiling）工具
 
 分析函数的结构大致如下，同样进行**预热**，执行TorchCUDA同步，然后调用分析器同时追踪CPU和GPU时间。接着运行目标代码，再次同步后输出所有时间的平均值表格。
 
@@ -301,7 +307,7 @@ def profile(description: str, run: Callable, num_warmups: int = 1, with_stack: b
 
 性能分析将是我们需要进行的更精细化的操作。性能分析它不仅能查明时间消耗在哪个**函数**，我们可以查看调用栈，通常我们接触的是PyTorch接口层，即直接调用的PyTorch组件，但在**PyTorch底层存在着完整的CUDA调用体系**。运行分析器时可以一直追踪到底层调用，看清实际执行的代码路径。这样能更直观地理解程序在硬件上的真实执行过程。PyTorch内置了非常便捷的分析器工具。这让我们不离开Python或者PyTorch环境就能获得清晰的输出结果。PyTorch 有一个很棒的内置分析器 https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html
 
-### 7.3.1 sleep函数的性能分析
+### 4.1 sleep函数的性能分析
 
 使用这个sleep函数示例，就是那个休眠函数。
 
@@ -312,11 +318,14 @@ def profiling():
     sleep_profile = profile("sleep", sleep_function) 
 ```
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-3-sheep的性能分析.png" width="800" alt="7-3-加法的性能分析">
+<div align="center">
+  <img src="./images/7-3-sleep的性能分析.png" alt="7-3-sleep的性能分析" width="800">
+  <p><em>图 3. sleep的性能分析</em></p>
+</div>
 
 观察运行结果会发现100%的时间都消耗在名为CUDA设备同步（`cudaDeviceSynchronize`）的操作上，因为实际上**没有GPU计算任务**。我们现在就像是在分析空操作。
 
-### 7.3.2 矩阵加法的性能分析
+### 4.2 矩阵加法的性能分析
 
 现在让我们看下面这个有实际意义的例子。这是个矩阵加法基础运算，先定义了接收参数A和B的加法函数执行矩阵相加。这个辅助函数会实例化两个随机高斯分布矩阵，然后调用操作参数中的内容。将两个2048维矩阵相加。
 
@@ -333,7 +342,11 @@ def profiling():
     add_profile = profile("add", run_operation2(dim=2048, operation=add_function))
 
 ```
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-4-add的性能分析.png" width="800" alt="7-4-add的性能分析">
+
+<div align="center">
+  <img src="./images/7-4-add的性能分析.png" alt="7-4-add的性能分析" width="800">
+  <p><em>图 4. add的性能分析</em></p>
+</div>
 
 现在开始分析并调用分析器，会得到类似上面这个图片中的输出结果。这就是分析器返回的内容。
 
@@ -341,7 +354,7 @@ def profiling():
 
 可见GPU运行极快，而CPU较慢。观察**CPU耗时**（即自占CPU时间），发现C++接口或C接口（比如 `aten:add` ）实际消耗了大量CPU时间，这些是向GPU传输数据时产生的开销。这就是加法函数的内部运行机制。
 
-### 7.3.3 矩阵乘法
+### 4.3 矩阵乘法
 
 ```python
 def run_operation2(dim: int, operation: Callable) -> Callable:
@@ -359,7 +372,10 @@ def profiling():
 
 矩阵乘法也是类似情况。这里我对A乘以B进行矩阵乘法运算，再次使用2048维矩阵并进行性能分析。此时看到 `aten:matmul` 调用，这说明底层接口执行矩阵乘法的过程。然后就会调用 `Cutlass` ,这是英伟达的高性能矩阵乘法CUDA库，随后分派到特定的Cutlass内核，其中包含分块尺寸参数。这实际上指向特定的分块（瓦片）尺寸和线程块数量等参数化配置，正是这些在执行矩阵乘法。同样在底部看到两个熟悉项：内核启动（ `cuLaunchKernel` ）和CUDA设备同步（ `cudaDeviceSynchronize` ）。可以再次观察到CPU时间与CUDA时间的分配情况。**由于矩阵乘法比向量加法更耗时，CUDA部分占用时间显著增加**。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-5-矩阵乘法的性能分析.png" width="800" alt="7-5-矩阵乘法的性能分析">
+<div align="center">
+  <img src="./images/7-5-矩阵乘法的性能分析.png" alt="7-5-矩阵乘法的性能分析" width="800">
+  <p><em>图 5. 矩阵乘法的性能分析</em></p>
+</div>
 
 **这里还有一个矩阵乘法示例**
 
@@ -379,7 +395,10 @@ def profiling():
 
 在这里乘以128维矩阵。128乘以128，比上面这个小得多。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-6-矩阵乘法的性能分析2.png" width="800" alt="7-6-矩阵乘法的性能分析2">
+<div align="center">
+  <img src="./images/7-6-矩阵乘法的性能分析2.png" alt="7-6-矩阵乘法的性能分析2" width="800">
+  <p><em>图 6. 矩阵乘法的性能分析2</em></p>
+</div>
 
 通过PyTorch profiler输出的内核名称，可以获取许多底层实现信息。例如矩阵乘法内核名 `cutlass_80_simt_sgemm_64x64x16` 中：
 - `cutlass` 指示使用了NVIDIA的CUTLASS线性代数库；
@@ -397,7 +416,7 @@ def profiling():
 
 到目前为止，这些操作在某种程度上非常简单。比如矩阵乘法和加法。它们基本是一一对应的：CPU端有一个操作，它就转换为GPU操作直接传输过去。我们可以做一些更加复杂的操作。
 
-### 7.3.4 torch.cdist计算距离的复杂操作
+### 4.4 torch.cdist计算距离的复杂操作
 
 ```python
 def run_operation2(dim: int, operation: Callable) -> Callable:
@@ -415,7 +434,10 @@ def profiling():
 
 这个叫`torch.cdist`的操作，它的作用是**计算两组矩阵之间向量的成对欧几里得距离**。这将是我需要的A和B之间的大型距离矩阵计算，这就是cdist。这是一个更复杂的操作，要计算欧几里得距离需要**计算点积，还需要计算平方根**。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-7-cdist的性能分析.png" width="800" alt="7-7-cdist的性能分析">
+<div align="center">
+  <img src="./images/7-7-cdist的性能分析.png" alt="7-7-cdist的性能分析" width="800">
+  <p><em>图 7. cdist的性能分析</em></p>
+</div>
 
 当我们计算cdist时就会看到上面这张图片，这是cdist的分析输出。我们看到这个Torch Python 命令在C接口中的map映射到一些较低级的cdist。第一行的 `aten::cdist` ，然后映射到 `aten::euclidean_dist` 。接着这会分解成一整套操作：比如 `aten::matmul、aten::pow` 等等，因为这些是计算所有向量间欧几里得距离所需的基本原语。
 
@@ -423,7 +445,7 @@ def profiling():
 
 由此我们可以知道应该把优化时间花在哪里，比如我们可以优化矩阵乘法，因为它占GPU70%以上的时间。
 
-### 7.3.5 gelu 和 softmax 
+### 4.5 gelu 和 softmax
 
 ```python
 def run_operation2(dim: int, operation: Callable) -> Callable:
@@ -440,7 +462,10 @@ def profiling():
 
 gelu是一个非线性激活函数。如果大家还记得我们第一章的内容，就会知道它是高斯误差线性单元。它由tanh和指数函数的乘积构成。我们将进行各种运算操作：首先执行A与B的加法运算，然后调用GELU函数，模拟我们在多层感知机中可能存在的线性加非线性结构。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-8-gelu的性能分析.png" width="800" alt="7-8-gelu的性能分析">
+<div align="center">
+  <img src="./images/7-8-gelu的性能分析.png" alt="7-8-gelu的性能分析" width="800">
+  <p><em>图 8. gelu的性能分析</em></p>
+</div>
 
 我们再次观察到基本相同的运算映射，比如 `aten::add` 对应A+B运算，接着看到其CUDA等效实现，最后这里还有一个完全用CUDA实现的GELU函数，这部分消耗了约33%的计算资源，比例很合理。
 
@@ -459,7 +484,10 @@ def profiling():
 
 随后我们看到softmax运算。由于这些运算模式会重复出现，将不再逐一展开详细说明。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-9-softmax的性能分析.png" width="800" alt="7-9-softmax的性能分析">
+<div align="center">
+  <img src="./images/7-9-softmax的性能分析.png" alt="7-9-softmax的性能分析" width="800">
+  <p><em>图 9. softmax的性能分析</em></p>
+</div>
 
 但需要重点强调的精妙之处在于：像softmax和GELU这些核心基础算子都有专门编写的内核实现。这意味着GPU并非在执行基础原语操作，而是通过**融合算子**一次性完成所有计算，完全避免了CPU与GPU之间的来回数据传输（上一章中说到的算子融合操作，这章后面还会讲到）。
 
@@ -469,21 +497,30 @@ def profiling():
 
 但是在self CUDA一列仅有31%的时间停留在 xmma 模块，另外60%的时间去显示在 `aten::mm` ，但是没有对应的内核实现，这显得有些神秘。对于复杂模块而言，这种可视化呈现并不理想。
 
-### 7.3.6 专业级分析工具 Nsight Systems
+### 4.6 专业级分析工具 Nsight Systems
 
 现在我们可以启用真正的专业级分析工具——NVIDIA **Nsight Systems**。这是NVIDIA提供的GPU**行为与性能详细分析方案，能让我们精确观察MLP运行时的实际状况**。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-10-NsightSystems.png" width="800" alt="7-10-NsightSystems">
+<div align="center">
+  <img src="./images/7-10-NsightSystems.png" alt="7-10-NsightSystems" width="800">
+  <p><em>图 10. NsightSystems</em></p>
+</div>
 
 本质上，当我们观察分析结果时，会看到几个不同的组成部分，我们在左上角的栏目可以看到CUDA硬件部分（CUDA HW），往下看到线程部分（Threads）。上半部分这个CUDA区域展示的是GPU正在执行的工作。而在线程部分，我们看到的是CPU正在处理的任务。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-11-NsightSystems代码.png" width="800" alt="7-11-NsightSystems代码">
+<div align="center">
+  <img src="./images/7-11-NsightSystems代码.png" alt="7-11-NsightSystems代码" width="800">
+  <p><em>图 11. NsightSystems代码</em></p>
+</div>
 
 我们可以用NVTX工具对代码进行了标注，就像上面这一幅图一样，这样当性能分析器运行时，它就能识别出这段代码属于名为的 `define_model` 代码块（`with nvtx.range("define_model"):model = MLP(dim, num_layers).to(get_device())`）。
 
 在调用分析器之前，我们应该已经在代码中添加了所有这些注释。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-12-NsightSystems2.png" width="800" alt="7-12-NsightSystems2">
+<div align="center">
+  <img src="./images/7-12-NsightSystems2.png" alt="7-12-NsightSystems2" width="800">
+  <p><em>图 12. NsightSystems2</em></p>
+</div>
 
 加载库文件之类的操作非常耗时，光是初始化所有内容就花费了7.5秒。然后在GPU上程序运行约7.5秒后才真正开始构建模型。
 
@@ -495,13 +532,13 @@ def profiling():
 
 ---
 
-## 7.4 内核融合（Kernel Fusion）
+## 5 内核融合（Kernel Fusion）
 
 我们在第六章中介绍过算子融合的概念，其**核心概念**是避免每次运算都在**DRAM和SM之间往返数据传输**，将多个操作合并为单个内核。
 
 GPU的计算就像小型工厂，每次执行运算时都需要将数据从仓库运到工厂再返回。如果顺序执行一系列运算，就会产生大量往返仓库的**传输开销**。我们希望建立一次性完成所有运算的工厂，从而避免数据的传输。现在我们要实现GELU激活函数，并为其编写内核程序。我们将用几种不同方式编写这个内核，然后观察其性能表现。
 
-### 7.4.1 pytorch 和 手工 实现 GeLU 的内核
+### 5.1 pytorch 和 手工 实现 GeLU 的内核
 
 GeLU的具体原理和细节可以在第四章中看到。
 
@@ -537,7 +574,10 @@ def manual_gelu(x: torch.Tensor):
     assert torch.allclose(y1, y2)
 ```
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-13-两个gelu的计算结果.png" width="800" alt="7-13-两个gelu的计算结果">
+<div align="center">
+  <img src="./images/7-13-两个gelu的计算结果.png" alt="7-13-两个gelu的计算结果" width="800">
+  <p><em>图 13. 两个gelu的计算结果</em></p>
+</div>
 
 我们可以运行代码，可以看到上面这幅图显示两个实现的**计算结果相同**，如果可以你们可以在随机高斯分布上系统性地验证这一点。
 
@@ -555,11 +595,14 @@ pytorch_time = benchmark("pytorch_gelu", run_operation1(dim=16384, operation=pyt
 
 ```
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-14-两个gelu的时间.png" width="800" alt="7-14-两个gelu的时间">
+<div align="center">
+  <img src="./images/7-14-两个gelu的时间.png" alt="7-14-两个gelu的时间" width="800">
+  <p><em>图 14. 7-14-两个gelu的时间</em></p>
+</div>
 
 从上图看到手动实现处理超大数据量需要8.1毫秒，而PyTorch原生实现仅需1.1毫秒。
 
-### 7.4.2 对两个实现进行性能分析
+### 5.2 对两个实现进行性能分析
 
 ```python
     # 对两个实现进行性能分析
@@ -568,24 +611,29 @@ pytorch_time = benchmark("pytorch_gelu", run_operation1(dim=16384, operation=pyt
     pytorch_gelu_profile = profile("pytorch_gelu", run_operation1(dim=16384, operation=pytorch_gelu))
 ```
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-15-手动gelu的性能分析.png" width="800" alt="7-15-手动gelu的性能分析">
+<div align="center">
+  <img src="./images/7-15-手动gelu的性能分析.png" alt="7-15-手动gelu的性能分析" width="800">
+  <p><em>图 15. 手动gelu的性能分析</em></p>
+</div>
 
 现在让我们剖析底层运行机制。手工版GeLU会执行大量运算，虽然进行了向量化处理，但这里启动了多个CUDA内核。**注意右侧显示该CUDA内核被调用了三次，因为存在大量浮点乘法运算，还包括加法运算和双曲正切计算，其中每个操作都可能产生延迟（大部分是通信的开销），最终导致相当大的时间开销**。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-16-pytorch的gelu的性能分析.png" width="800" alt="7-16-pytorch的gelu的性能分析">
+<div align="center">
+  <img src="./images/7-16-pytorch的gelu的性能分析.png" alt="7-16-pytorch的gelu的性能分析" width="800">
+  <p><em>图 16. pytorch的gelu的性能分析</em></p>
+</div>
 
 现在观察PyTorch版GELU的实现，**仅一次CUDA内核启动就处理了整个任务**。这种方式非常非常快，**因为它只启动了一个CUDA内核**。
 
 我们希望能设法直接使用CUDA内核来实现这一点。你可能会想 PyTorch 团队肯定是用最低层级的语言实现了这个功能，所以我们也应该这样做。但我们不会直接使用最底层的语言，但会使用C++ API，用 C++ 编写 CUDA 内核。
 
-### 7.4.3 使用C++ API编写内核
+### 5.3 使用C++ API编写内核
 
 当我们提到CUDA时，实际上指的是用于连接和编程GPU的C语言API。基于之前描述的GPU逻辑模型，我们将编写一个函数f。当我们调用这个CUDA内核时，它会自动对向量或矩阵的所有元素执行f函数，从而实现我们所需的并行计算。
 
 在术语方面。我们会有一个网格（grid），它是由线程块（threadblocks）组成的集合。可以这样理解：有一个任务，将其分割成若干块。在二维网格中，会有行坐标和列坐标，这在处理矩阵时非常有用。每个块都有其尺寸，即包含的线程块数量，这就是块的维度。每个块内部又包含一组线程，这样就形成了层级结构：网格中包含线程块，线程块中包含线程。
 
 每个函数基本上会接收三个参数：块索引（指示属于哪个线程块）、块维度信息以及线程索引。通过这些参数，我们可以确定自己在矩阵或向量中的坐标，从而执行相应的逻辑。
-
 
 ```cpp
 // 文件保存命名为gelu.cu ，C++的CUDA代码
@@ -637,8 +685,6 @@ torch::Tensor gelu(torch::Tensor x) {
 
 我们执行计算操作。具体来说，我会进行这样的操作： `out[i] = 0.5 * x * (1.0 + tanh(0.79788456 * (x + 0.044715 * x * x * x)));` 获取输入数据，通过索引访问第i个元素，按照之前的方式计算gelu函数，将结果赋值给输出数组的第i个位置，这样就完成了。
 
-
-
 **第二部分**
 
 在gelu函数，在Triton或CUDA代码中有这两个关键步骤始终需要完成，我们总是要检查两件事，即 `TORCH_CHECK(x.device().is_cuda());TORCH_CHECK(x.is_contiguous());` ，第一个要**确保输入 x 位于GPU设备**上，比如是某种CUDA张量。如果不是那就会出问题，因为我们将无法在GPU上进行任何运算。第二，我们需要检查**确保 x 是连续存储的**，因为当我们对x进行索引时会执行大量索引运算，此时系统默认 x 存储在连续内存块中。如果不符合这个条件上就无法实现通用性处理,这意味着它必须位于连续的内存块中。
@@ -651,9 +697,7 @@ torch::Tensor gelu(torch::Tensor x) {
 
 完成这些基础工作后，就可以启动内核了。通过尖括号指定块数量和块大小即 `<<<num_blocks, block_size>>>` ，这些参数会传递给内核指令。然后传入x和y的指针以及元素总数 `x.data_ptr<float>(), y.data_ptr<float>(), num_elements` ，这些将用于计算内核的边界条件。
 
-
 实际上内存几乎不会出现碎片化，因为系统会分配连续的内存空间，除非你在进行一些非常特殊的操作（比如说转置），否则不会出出现不连续的情况。所以在更高层次编码时要注意，如果你进行转置然后遍历某个按列存储的内容，那么内存就不再连续，在索引中所有元素之间会有跳跃。而块的大小取决于是否有足够的块来饱和流多处理器，每个块内是否有足够的工作量
-
 
 ```python
 # 在python中编译运行
@@ -704,7 +748,6 @@ def create_cuda_gelu():
 
 接下来就可以使用 `load_inline` 直接加载写好的CUDA gelu代码，然后在Python环境编译一个 python 模块。现在我们已经定义好了CUDA函数，我们可以在Python中直接调用它。我们会使用C绑定来调用这个函数。CUDAgelu的调用已经完成。我可以验证手动实现的gelu和CUDA版本的gelu结果是否一致。
 
-
 现在让我们来对两个版本进行性能测试。
 
 ```python
@@ -713,7 +756,10 @@ if cuda_gelu is not None:
     cuda_gelu_profile = profile("cuda_gelu", run_operation1(dim=16384, operation=cuda_gelu))
 ```
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-17-cuda的gelu的性能分析.png" width="800" alt="7-17-cuda的gelu的性能分析">
+<div align="center">
+  <img src="./images/7-17-cuda的gelu的性能分析.png" alt="7-17-cuda的gelu的性能分析" width="800">
+  <p><em>图 17. cuda的gelu的性能分析</em></p>
+</div>
 
 这里记录了运行PyTorch版本所需的时间，和上次测试结果类似，大约是1.1毫秒。而手动实现的时间记得是8.1毫秒。
 
@@ -721,7 +767,10 @@ if cuda_gelu is not None:
 
 **接下来进行性能分析。**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-18-cuda的gelu的性能分析2.png" width="800" alt="7-18-cuda的gelu的性能分析2">
+<div align="center">
+  <img src="./images/7-18-cuda的gelu的性能分析2.png" alt="7-18-cuda的gelu的性能分析2" width="800">
+  <p><em>图 18. cuda的gelu的性能分析2</em></p>
+</div>
 
 这里显示调用了 `gelu_kernel` 内核，这就是被发送到GPU执行的代码。然后调用了 `aten::empty_like` 进行初始化，接着是 ` aten::empty_strided `，随后是CUDA内核启动和设备同步操作。
 
@@ -735,7 +784,7 @@ if cuda_gelu is not None:
 
 当然我们有更好的Python抽象来编写CUDA内核，那就是Triton。
 
-## 7.5 Triton
+## 6 Triton
 
 Triton是OpenAI在2021年开发的领域特定语言，它使GPU编程更容易上手，因为不需要管理GPU的所有细节。而且我们可以使用Python编写一切而不再需要考虑线程，而是考虑线程块。
 
@@ -745,9 +794,9 @@ Triton管理了很多烦人但可以自动优化的东西，它可以管理内�
 
 Triton非常好的一点时它可以在很大程度上超越许多PyTorch实现。就像在熟悉的Python领域直接编写CUDA，它全在Python中，你可以单步调试.
 
-### 7.5.1 使用Triton编写
+### 6.1 使用Triton编写
 
-####  Triton实现Softmax（整行装入一个块）
+**Triton实现Softmax（整行装入一个块）**
 
 当矩阵一行的大小不超过线程块大小时，可以将一行完整分配给一个线程块。Triton代码几乎与普通PyTorch一致，因为块内操作自动涵盖归约和广播。
 
@@ -771,7 +820,7 @@ def softmax_kernel(x_ptr, y_ptr, n_cols, BLOCK_SIZE: tl.constexpr):
 
 ---
 
-#### Triton实现行求和（数据超过块大小，需分块循环归约）
+**Triton实现行求和（数据超过块大小，需分块循环归约）**
 
 当行长度超过线程块大小时，需要在块内**循环处理多个tile**，每个线程维护一个局部累加器，最后跨线程归约。
 
@@ -799,7 +848,7 @@ def row_sum_kernel(x_ptr, y_ptr, M, N, BLOCK_SIZE: tl.constexpr):
 
 ---
 
-#### Triton实现矩阵乘法（二维Tiling）
+**Triton实现矩阵乘法（二维Tiling）**
 
 这是深度学习中最核心的操作，也是引入**二维分块**的关键案例。
 
@@ -846,7 +895,7 @@ def matmul_kernel(A_ptr, B_ptr, C_ptr, M, N, K,
 
 ---
 
-#### 实现gelu
+**实现gelu**
 
 ```python
 @triton.jit
@@ -917,7 +966,7 @@ offsets = block_start + tl.arange(0, BLOCK_SIZE)
 
 这与之前的操作非常非常相似，但这是向量化版本。我们可以一次性操作整个块，所以不同于从线程视角思考，现在是从块的视角思考，但差异并不大。
 
-### 7.5.2 triton的测试
+### 6.2 triton的测试
 
 ```python
     manual_time = benchmark("manual_gelu", run_operation1(dim=16384, operation=manual_gelu)) # @inspect manual_time
@@ -927,15 +976,21 @@ offsets = block_start + tl.arange(0, BLOCK_SIZE)
     triton_gelu_profile = profile("triton_gelu", run_operation1(dim=16384, operation=triton_gelu))
 ```
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-19-triton的gelu的性能分析.png" width="800" alt="7-19-triton的gelu的性能分析">
+<div align="center">
+  <img src="./images/7-19-triton的gelu的性能分析.png" alt="7-19-triton的gelu的性能分析" width="800">
+  <p><em>图 19. triton的gelu的性能分析</em></p>
+</div>
 
 手动gelu耗时8.1毫秒，PyTorch版本1.1毫秒，CUDA版本1.84毫秒，Triton版本1.848秒。虽然速度没有提升，但编写Triton代码要容易得多。我们用Python编写，考虑块操作，还能进行向量化加法。如果处理更复杂的任务，Triton会帮你处理很多内存操作，这确实很不错。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-20-triton的gelu的性能分析2.png" width="800" alt="7-20-triton的gelu的性能分析">
+<div align="center">
+  <img src="./images/7-20-triton的gelu的性能分析2.png" alt="7-20-triton的gelu的性能分析" width="800">
+  <p><em>图 20. triton的gelu的性能分析</em></p>
+</div>
 
 性能分析再次显示，单个内核启动消耗了所有GPU时间，这正是我们想要的。
 
-## 7.6 torch.compil
+## 7 torch.compil
 
 ```python
 def pytorch_compilation():
@@ -947,11 +1002,17 @@ def pytorch_compilation():
 
 编写CUDA内核很好，但或许我们并不需要这么做，因为使用工具`torch.compil`就能实现自动优化，我们做的就是将立方和指数运算塞进单个CUDA内核（`compiled_gelu = torch.compile(manual_gelu)`）。`torch.compile`它**能够接收未优化的PyTorch代码并生成优化版本。它会尝试自动进行内核融合等优化。这个编译后的gelu在输出结果上与之前等效**。它实质上是利用PyTorch现有的JIT编译器自动优化代码。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-21-compile的的时间消耗.png" width="800" alt="7-21-compile的的时间消耗">
+<div align="center">
+  <img src="./images/7-21-compile的的时间消耗.png" alt="7-21-compile的的时间消耗" width="800">
+  <p><em>图 21. compile的的时间消耗</em></p>
+</div>
 
 现在来看运行时间，手动8.1毫秒，PyTorch 1.1毫秒，CUDA 1.8毫秒，而torch.compile仅需 1.47毫秒。
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter7/images/7-22-compil的gelu的性能分析.png" width="800" alt="7-22-compil的gelu的性能分析">
+<div align="center">
+  <img src="./images/7-22-compile的gelu的性能分析.png" alt="7-22-compile的gelu的性能分析" width="800">
+  <p><em>图 22. compile的gelu的性能分析</em></p>
+</div>
 
 现代JIT编译器非常强大，能在无需人工干预的情况下实现操作融合等优化。比我们做的稍更优化。因此它的性能甚至比我们的代码还要稍好一些。所以`torch.compile`确实十分优秀。
 
@@ -959,5 +1020,15 @@ def pytorch_compilation():
 
 但像FlashAttention1、2、3这类优化就相当复杂。如今 `torch.compile` 和Jax的XLA编译器确实能实现这些，但这是因为我们事后才明白这些是正确的优化方向。而且有些优化策略并不容易发现，**比如FlashAttention3利用了H100硬件的底层优化，这对JIT编译器来说并不直观，这些就是torch.compile难以处理，但人工可以优化的场景**。
 
-不过核心观点是我们**不用想着为每个模块都手写CUDA内核，因为这很可能是在浪费时间。但如果在开发新架构时遇到复杂模块，GPU利用率不理想却认为有优化空间，这时候就值得使用Triton了**。
+## 8 总结与测试题
 
+### 8.1 课程总结
+
+
+
+### 8.2 测试题
+
+
+## 参考资料
+
+- [性能分析（Profiling）工具](https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html)
