@@ -815,7 +815,7 @@ def siglip_loss(image_embeds, text_embeds, temperature, bias):
 
 ---
 
-## 参考文献与延伸阅读
+## 延伸专题：KV Cache 的另一种压缩路径\n\n&emsp;&emsp;MLA 本身是纯文本模型的注意力技术，但它能帮助我们把前面章节的注意力架构与推理内存联系起来。可阅读[DeepSeek MLA：用低秩潜变量压缩 KV Cache](./mla_deep_dive.md)，了解压缩原理、RoPE 解耦、容量估算与适用边界。\n\n## 参考文献与延伸阅读
 
 - [CLIP (Radford et al., 2021)](https://arxiv.org/abs/2103.00020) — 对比语言-图像预训练
 - [OpenCLIP (Ilharco et al., 2022)](https://arxiv.org/abs/2212.07143) — CLIP 的开源复现
