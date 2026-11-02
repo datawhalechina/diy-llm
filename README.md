@@ -60,7 +60,7 @@
 | [第7章 GPU 高性能编程](docs/zh/chapter7/chapter7_第七章GPU高性能编程.md) | CUDA 编程模型、Tensor Cores、Shared Memory、Triton 入门 | [作业2](coursework/assignment2-systems/) | ✅ |
 | [第8章 分布式训练](docs/zh/chapter8/chapter8_第八章分布式训练.md) | 数据并行/模型并行/流水线并行、ZeRO-1/2/3、FSDP、梯度累积、All-Reduce | [作业2](coursework/assignment2-systems/) | ✅ |
 | [第9章 Scaling Laws](docs/zh/chapter9/chapter9_Scaling_Laws.md) | Chinchilla 定律、计算最优配置、Scaling 实验设计、Extrapolation | [作业3](coursework/assignment3-scaling/) | ✅ |
-| [第10章 推理](docs/zh/chapter10/推理.md) | KV Cache、投机解码、量化 (GPTQ/AWQ)、PagedAttention、Continuous Batching | [作业6](coursework/assignment6-evaluation/) | ✅ |
+| [第10章 推理](docs/zh/chapter10/chapter10_推理.md) | KV Cache、投机解码、量化 (GPTQ/AWQ)、PagedAttention、Continuous Batching | [作业6](coursework/assignment6-evaluation/) | ✅ |
 | [第11章 数据工程](docs/zh/chapter11/chapter11_数据工程.md) | 数据质量过滤、MinHash 去重、PII 脱敏、数据配比、Data Curriculum | [作业4](coursework/assignment4-data/) | ✅ |
 | [第12章 评估与基准测试](docs/zh/chapter12/chapter12_评估与基准测试.md) | MMLU、HumanEval、HELM、CEval、AlpacaEval、Arena 排名 | [作业6](coursework/assignment6-evaluation/) | ✅ |
 | [第13章 大模型的基本训练流程](docs/zh/chapter13/chapter13_第十三章大模型的基本训练流程.md) | Pre-training、SFT、DPO、RLHF PPO 流程、Alignment Tax | [作业5](coursework/assignment5-alignment/) | ✅ |
