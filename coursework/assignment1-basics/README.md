@@ -5,7 +5,9 @@
 ## 环境要求
 
 ```bash
-pip install torch numpy transformers tokenizers tqdm psutil matplotlib
+pip install -r requirements.txt
+# 只要 CPU 时可用：pip install -r requirements.txt --index-url https://download.pytorch.org/whl/cpu
+# 版本下限见 requirements.txt（torch>=2.4 / numpy>=2.0 / transformers>=4.40）
 ```
 
 ## 快速开始

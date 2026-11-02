@@ -84,7 +84,7 @@ L(N,D) = E + A/N^α + B/D^β
 ### 环境要求
 
 ```bash
-pip install torch numpy matplotlib scipy transformers psutil
+pip install -r requirements.txt
 ```
 
 ### 训练模型

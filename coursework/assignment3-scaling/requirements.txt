@@ -1,0 +1,9 @@
+# Assignment 3 (scaling) 依赖
+# CPU 环境可加: --index-url https://download.pytorch.org/whl/cpu
+torch>=2.4
+numpy>=2.0,<3
+scipy>=1.11
+matplotlib>=3.8
+transformers>=4.40
+psutil>=5.9
+tqdm>=4.66

@@ -1,0 +1,9 @@
+# Assignment 1 (basics) 依赖
+# CPU 环境可加: --index-url https://download.pytorch.org/whl/cpu
+torch>=2.4
+numpy>=2.0,<3
+transformers>=4.40
+tokenizers>=0.19
+tqdm>=4.66
+psutil>=5.9
+matplotlib>=3.8
