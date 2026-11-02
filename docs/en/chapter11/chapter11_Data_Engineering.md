@@ -612,7 +612,7 @@ class FastTextClassifier(nn.Module):
         return logits
 ```
 
-**Complete runnable [FastText](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter11/FastText.py)**
+**Complete runnable [FastText](https://github.com/datawhalechina/diy-llm/blob/main/docs/en/chapter11/FastText.py)**
 
 Output example:
 >Input text: I hate this product
@@ -772,7 +772,7 @@ Step 4: Query another new word "god"
 
 >Both positions are 1, so Bloom Filter判定 "god" **may have appeared**, but实际上 "god" was not in items = ["cat", "dog"] — this is a **false positive** (misjudgment).
 
-*Runnable code: [Bloom Filter Simplified Implementation](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter11/bloom%20Filter%E7%AE%80%E5%8C%96%E5%AE%9E%E7%8E%B0).*
+*Runnable code: [Bloom Filter Simplified Implementation](https://github.com/datawhalechina/diy-llm/blob/main/docs/en/chapter11/bloom%20Filter%E7%AE%80%E5%8C%96%E5%AE%9E%E7%8E%B0).*
 
 **3. Locality-Sensitive Hashing (LSH)**
 

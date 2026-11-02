@@ -672,7 +672,7 @@ class FastTextClassifier(nn.Module):
         return logits
 ```
 
-**完整可运行的[FastText](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter11/FastText.py)**
+**完整可运行的[FastText](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter11/FastText.py)**
 
 输出示例
 > 输入文本: I hate this product
@@ -837,7 +837,7 @@ Step4 查询另一个新单词"god"
 
 > 两个位置都为1则Bloom Filter判断"god"**可能出现过**，但实际上"god"并未出现在items = ["cat", "dog"]中，这也就是**假阳性**（误判）。
 
-*可以运行的代码[Bloom Filter简化实现示例](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter11/bloom%20Filter%E7%AE%80%E5%8C%96%E5%AE%9E%E7%8E%B0)。*
+*可以运行的代码[Bloom Filter简化实现示例](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter11/bloom%20Filter%E7%AE%80%E5%8C%96%E5%AE%9E%E7%8E%B0)。*
 
 3. **局部敏感哈希（LSH）**
 
@@ -1041,9 +1041,9 @@ $$
 - [去重数据用于训练的优点](https://arxiv.org/pdf/2107.06499)
 - [LSH数据去重](http://infolab.stanford.edu/~ullman/mmds/ch3n.pdf)
 - [CCNet研究](https://arxiv.org/pdf/1911.00359)
-- [FastText](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter11/FastText.py)
+- [FastText](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter11/FastText.py)
 - [bloom过滤器](https://en.wikipedia.org/wiki/Bloom_filter)
-- [Bloom Filter简化实现示例](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter11/bloom%20Filter%E7%AE%80%E5%8C%96%E5%AE%9E%E7%8E%B0)
+- [Bloom Filter简化实现示例](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter11/bloom%20Filter%E7%AE%80%E5%8C%96%E5%AE%9E%E7%8E%B0)
 - [最新研究](https://www.pcgamer.com/software/ai/anthropic-reveals-that-as-few-as-250-malicious-documents-are-all-it-takes-to-poison-an-llms-training-data-regardless-of-model-size)
 - [LLM驱动的科学研究](https://www.weforum.org/stories/2025/12/data-ai-training-synthetic)
 - [LLM数据评估研究](https://arxiv.org/abs/2503.12072)

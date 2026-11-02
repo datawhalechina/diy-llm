@@ -695,7 +695,7 @@ Transformer的标准Attention在序列长度为 $N$ 时具有 $O(N^2)$ 的计算
 
 FlashAttention并不改变Attention的渐进计算复杂度（FLOPs仍为 $O(N^2)$ ），而是通过分块（tiling）策略，在片上SRAM中完成分块的 $QK^T$ 、online softmax以及与 $V$ 的累积计算，从而避免将完整的Attention matrix显式并写入HBM。该方法通过显著减少HBM访问次数并提高数据复用率，从而提升计算密度，在实际过程中中常将Attention计算从带宽限制转变为更接近 compute-bound，从而在实际GPU上获得显著性能提升。
 
-> FlashAttention在数学上与标准attention等价（除浮点误差外），属于精确重排而非近似计算。**这里可以通过运行 [FlashAttention.ipynb](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/zh/chapter6/Flashattention.ipynb)，对比一下FlashAttention和标准Attention的计算结果差异。**
+> FlashAttention在数学上与标准attention等价（除浮点误差外），属于精确重排而非近似计算。**这里可以通过运行 [FlashAttention.ipynb](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter6/Flashattention.ipynb)，对比一下FlashAttention和标准Attention的计算结果差异。**
 
 <div align="center">
   <img src="./images/6-32-FlashAttention计算示意.png" alt="左图：前向传播+反向传播的运行时间；右图：注意力内存使用情况。" width="800">
@@ -1191,5 +1191,5 @@ https://github.com/datawhalechina/self-llm/blob/master/support_model_Ascend.md)�
 - [NVIDIA Ampere 架构详解](https://developer.nvidia.com/blog/nvidia-ampere-architecture-in-depth/)
 - [NVIDIA Ampere GPU 架构应用优化](https://developer.download.nvidia.cn/video/gputechconf/gtc/2020/presentations/s21819-optimizing-applications-for-nvidia-ampere-gpu-architecture.pdf?ref=blog.paperspace.com#3#1)
 - [NVIDIA GPU 每线程寄存器限制讨论](https://forums.developer.nvidia.com/t/whats-the-max-register-number-that-causes-slowdown/234969#main-container)
-- [FlashAttention.ipynb](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/zh/chapter6/Flashattention.ipynb)
+- [FlashAttention.ipynb](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter6/Flashattention.ipynb)
 - [Ascend NPU 大语言模型部署教程](https://github.com/datawhalechina/self-llm/blob/master/support_model_Ascend.md)
