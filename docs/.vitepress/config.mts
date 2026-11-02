@@ -121,7 +121,7 @@ const zhSidebar = {
         { text: '第7章 GPU 高性能编程', link: '/chapter7/chapter7_第七章GPU高性能编程' },
         { text: '第8章 分布式训练', link: '/chapter8/chapter8_第八章分布式训练' },
         { text: '第9章 Scaling Laws', link: '/chapter9/chapter9_Scaling_Laws' },
-        { text: '第10章 推理', link: '/chapter10/推理' },
+        { text: '第10章 推理', link: '/chapter10/chapter10_推理' },
         { text: '第11章 数据工程', link: '/chapter11/chapter11_数据工程' },
         { text: '第12章 评估与基准测试', link: '/chapter12/chapter12_评估与基准测试' },
         { text: '第13章 大模型的基本训练流程', link: '/chapter13/chapter13_第十三章大模型的基本训练流程' },
