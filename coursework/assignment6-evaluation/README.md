@@ -64,14 +64,18 @@ assignment6_evaluation/
 conda create -n eval_env python=3.10
 conda activate eval_env
 
-# 2. 安装lm-evaluation-harness
-cd lm-evaluation-harness
-pip install -e .
-pip install -e .[math]
+# 2. 安装 lm-evaluation-harness
+#    本仓库未内置该目录，需要先克隆源码（PyPI 上包名为 lm-eval）
+git clone https://github.com/EleutherAI/lm-evaluation-harness
+pip install -e lm-evaluation-harness
+pip install -e "lm-evaluation-harness[math]"
 
-# 3. 安装evalscope
+# 3. 安装 evalscope
 pip install evalscope
 pip install 'evalscope[app]' -U  # 可视化依赖
+
+# 或者直接用本目录的依赖清单（等价内容，版本已对齐）
+pip install -r requirements.txt
 ```
 
 ### 开始学习

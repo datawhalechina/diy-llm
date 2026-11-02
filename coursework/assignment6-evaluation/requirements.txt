@@ -1,0 +1,7 @@
+# Assignment 6 (evaluation) 依赖
+# 说明：lm-evaluation-harness 在 PyPI 上的包名是 lm-eval，两者是同一个项目。
+#       README 中「pip install -e .」的方式需要先克隆源码，见 README 快速开始。
+torch>=2.4
+transformers>=4.40
+lm-eval==0.4.13
+evalscope==1.14.1
