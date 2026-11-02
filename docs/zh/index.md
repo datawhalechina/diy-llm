@@ -56,7 +56,7 @@
 | [第7章 GPU 高性能编程](chapter7/chapter7_第七章GPU高性能编程.md) | CUDA 与高性能编程 | [作业2](../coursework/assignment2-systems/) | ✅ |
 | [第8章 分布式训练](chapter8/chapter8_第八章分布式训练.md) | 并行范式与跨机训练 | [作业2](../coursework/assignment2-systems/) | ✅ |
 | [第9章 Scaling Laws](chapter9/chapter9_Scaling_Laws.md) | 扩展定律与实验 | [作业3](../coursework/assignment3-scaling/) | ✅ |
-| [第10章 推理](chapter10/推理.md) | 推理性能与落地优化 | [作业6](../coursework/assignment6-evaluation/) | ✅ |
+| [第10章 推理](chapter10/chapter10_推理.md) | 推理性能与落地优化 | [作业6](../coursework/assignment6-evaluation/) | ✅ |
 | [第11章 数据工程](chapter11/chapter11_数据工程.md) | 数据清洗、构建与管理 | [作业4](../coursework/assignment4-data/) | ✅ |
 | [第12章 评估与基准测试](chapter12/chapter12_评估与基准测试.md) | 指标体系与评测方法 | [作业6](../coursework/assignment6-evaluation/) | ✅ |
 | [第13章 大模型的基本训练流程](chapter13/chapter13_第十三章大模型的基本训练流程.md) | 预训练、SFT、RL 流程 | [作业5](../coursework/assignment5-alignment/) | ✅ |
