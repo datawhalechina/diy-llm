@@ -14,6 +14,9 @@ tokenized/
 *.jsonl
 *.bz2
 
+# 测试夹具必须纳入版本控制：tests/fixtures 下的 .txt 是 test_extract / test_quality / test_deduplication 的必需输入
+!tests/fixtures/**/*.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
