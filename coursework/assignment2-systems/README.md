@@ -3,9 +3,6 @@
 有关作业的完整描述，请参见作业文档
 [cs336_spring2025_assignment2_systems.pdf](./相关文档/cs336_spring2025_assignment2_systems.pdf)
 
-翻译后的中文文档：
-[【翻译】cs336_spring2025_assignment2_systems.pdf](./相关文档/【翻译】cs336_spring2025_assignment2_systems.pdf)
-
 如果您发现作业文档或代码中存在任何问题，请随时提出GitHub issue或提交修复的pull request。
 
 ## 环境设置
