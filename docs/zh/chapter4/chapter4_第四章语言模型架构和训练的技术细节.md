@@ -876,7 +876,7 @@ DeepSeek Sparse Attention（DSA）是 DeepSeek-V3.2-Exp 引入的细粒度动态
   <p><em>图 24. DSA_exp</em></p>
 </div>
 
-由deepseek发布的论文（获得ACL 2025最佳论文）来看，NSA与全注意力相比，得分略胜，在速度上则是完胜。对于 64k 长度序列的处理，NSA 在全注意力机制的所有阶段（解码、前向传播和后向传播）中均实现了显著的计算加速
+由deepseek发布的论文来看，DeepSeek V3.2 使用的DSA与DeepSeek V3.1 使用的 MLA 相比，在成本和速度上是完胜。
 
 **回顾以往的注意力机制**
 
