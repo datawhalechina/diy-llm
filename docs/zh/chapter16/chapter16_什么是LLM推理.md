@@ -404,7 +404,7 @@ Denny Zhou在演讲的最后也提到一个观点：对于LLM解决问题的过�
 
 以及在实际使用过程中，诸如CoT、Prompt引导以及多路径采样等方法，**通过将复杂问题分解为中间推理步骤，增加了推理时的计算量**，从而使模型能够解决超出单步前向传播能力的复杂问题。此外，通过检索增强或工具调用等方式，LLM可以获取外部实时信息，**弥补参数化知识在覆盖范围和时效性上的不足，为推理过程提供更准确的前提条件**，从而间接提升复杂任务的解决效果。
 
-从已有研究可以看出，我们需要从预训练阶段改善LLM的基础能力，而大语言模型能力的提升在很大程度上遵循[Scaling Law](https://github.com/datawhalechina/diy-llm/blob/main/docs/chapter9/chapter9_Scaling_Laws.md)：随着模型参数规模、训练数据规模以及计算量按合理比例协调扩展，模型的测试损失通常呈现出可预测的幂律下降趋势，从而带来整体性能的提升。然而，这一方法在实际应用中也面临一个重要挑战，即高质量人类文本数据的增长速度有限，模型训练逐渐接近可获取数据规模的上限。
+从已有研究可以看出，我们需要从预训练阶段改善LLM的基础能力，而大语言模型能力的提升在很大程度上遵循[Scaling Law](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter9/chapter9_Scaling_Laws.md)：随着模型参数规模、训练数据规模以及计算量按合理比例协调扩展，模型的测试损失通常呈现出可预测的幂律下降趋势，从而带来整体性能的提升。然而，这一方法在实际应用中也面临一个重要挑战，即高质量人类文本数据的增长速度有限，模型训练逐渐接近可获取数据规模的上限。
 
 针对这一问题，一些研究提出可以在预训练和后训练等多个阶段利用模型生成的合成数据来进一步扩展训练分布。在"持续进化 AI"相关研究中，模型可以通过生成新的训练样本，并结合筛选、评估或自我改进机制对这些样本进行迭代优化，从而在一定程度上缓解对人工标注数据的依赖。这一思路在**表面形式上类似于AlphaGo Zero的自我博弈训练机制**，但需要指出关键差异：AlphaGo Zero依赖于围棋规则提供的完美验证信号，而LLM面对的大多数开放性任务缺乏可靠的自动验证器，因此自我改进的效果受到验证信号质量的严重制约。 此外，这种方法还面临模型坍塌的风险——反复在自身生成的数据上训练可能导致分布收窄与质量退化，因此通常需要引入外部验证信号和数据质量筛选机制加以保障。总体而言，合成数据方法更多是在扩展训练分布和提高能力利用效率，或许LLM能够突破所有人类知识的上限。
 
@@ -445,7 +445,7 @@ Denny Zhou在演讲的最后也提到一个观点：对于LLM解决问题的过�
 - [过犹不及_理解大语言模型中的思维链长度](https://arxiv.org/pdf/2502.07266)
 - [Google团队提出DTR指标！](https://arxiv.org/pdf/2602.13517)
 - [OpenAI提示词工程指南](https://help.openai.com/en/articles/6654000-best-practices-for-prompt-engineering-with-the-openai-api)
-- [Scaling law](https://github.com/datawhalechina/diy-llm/blob/main/docs/chapter9/chapter9_Scaling_Laws.md)
+- [Scaling law](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter9/chapter9_Scaling_Laws.md)
 - [Stanford持续进化AI](https://zitongyang.github.io/slides/ZitongYang_defense_slides.pdf)
 - [神经细胞自动机（NCA）生成非语言合成数据，用于语言模型的预预训练](https://arxiv.org/pdf/2603.10055)
 - [序列预测器都可以作为压缩器](https://arxiv.org/pdf/2309.10668)
