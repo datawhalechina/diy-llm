@@ -1,4 +1,6 @@
 # CS336 2025 年春季 作业 4：数据
+
+> 常见问题与排错请参阅[作业 FAQ](../FAQ.md)。
 有关本次作业的完整说明，请参阅作业讲义：
 [cs336_spring2025_assignment4_data.pdf](./相关文档/cs336_spring2025_assignment4_data.pdf)
 
