@@ -15,12 +15,45 @@
 </div>
 
 <div align="center">
-  <p><a href="https://datawhalechina.github.io/diy-llm/">📚 在线阅读地址</a></p>
-  <h3>📚 带你系统性学习大语言模型</h3>
-  <p><em>一座为中文学习者量身打造的"LLM炼丹工坊"</em></p>
+  <p>
+    <a href="https://datawhalechina.github.io/diy-llm/"><img src="https://img.shields.io/badge/在线阅读-0969da?style=for-the-badge" alt="在线阅读"></a>
+    <a href="https://github.com/datawhalechina/diy-llm/releases/latest/"><img src="https://img.shields.io/badge/PDF_讲义-2ea44f?style=for-the-badge" alt="PDF 讲义"></a>
+    <a href="https://github.com/datawhalechina/diy-llm/tree/main/coursework"><img src="https://img.shields.io/badge/作业代码-f59e0b?style=for-the-badge" alt="作业代码"></a>
+  </p>
+  <h3>📚 大模型是怎样炼成的</h3>
+  <p><em>从分词器、数据与训练，到系统优化、推理、对齐、评估与多模态，把构建 LLM 的整条链路连成一套知识体系。</em></p>
 </div>
 
-我们希望这门 CS336 中文课程，不只是斯坦福原版的"汉化版"，而是一座为中文学习者量身打造的"LLM炼丹工坊"。在这里，你亲手锻造理解、打磨代码、调控火候，最终炼出属于自己的大模型真丹。
+训练大模型常被戏称"炼丹"：数据是灵材，算力是丹炉，超参数全靠手感。CS336 把这套流程讲透了，但门槛不低；我们把每味"药材"和每道工序拆开写清楚，尽量让玄学变回能复现的原理和代码。
+
+## ✍️ 项目缘起
+
+2025 年春季，[Stanford CS336: Language Modeling from Scratch](https://cs336.stanford.edu/spring2025/) 正式开课。课程很硬核，社区里陆续有学员反馈：想学，但英文讲义、前置知识和作业环境都是门槛，希望有一份能真正读懂、也能跟着做出来的中文版。
+
+于是我们召集了一批贡献者，用半年多的时间走完 **创作 → 内测 → 公测 → 逐章打磨** 的流程。这不是把原版搬运翻译一遍，而是按中文学习者的学习习惯重新组织知识体系：补背景知识、写作业实现、核对并补充参考内容来源、加入国产模型案例。过程中借助 AI 做辅助翻译与资料整理，但成稿由贡献者人工撰写定稿、交叉审校，并依据内测与公测读者的反馈反复修订。**不是机翻稿，也不是 AI 批量生成的内容**，主要章节都有明确的作者，并设全文内容审核。我们把它称作"有人味儿"的教程，这也是这个项目最花时间的地方。
+
+目前课程包含 **16 章正文 + 6 个配套作业**，由 3 位项目负责人统筹、多位社区贡献者参与，并持续接受勘误与修订（名单见下方「贡献者」）。
+
+### 我们做了哪些本土化改造
+
+| 维度 | 原版 CS336 | Diy-LLM 中文版 |
+|------|------------|----------------|
+| 知识组织 | 按 lecture 顺序推进，默认已具备数学、PyTorch 与系统基础 | 按"构建 LLM 的工程流程"重排章节，把数学、PyTorch、GPU 等前置知识单独补齐讲解，学习曲线更平滑 |
+| 讲解方式 | 英文课堂讲授 + 讲义 | 中文逐章撰写，关键推导、术语和易混淆点展开讲，同时保留原版技术深度 |
+| 作业实践 | 提供作业说明与测试 | 6 个作业给出可运行的实现，并复盘"写下每一行代码时的思考过程"；补充 CPU 调试、MacBook MPS 等适配 |
+| 参考内容来源 | 课程讲义与论文线索 | 补充更详细的参考内容来源，方便顺藤摸瓜读原始资料 |
+| 模型与案例 | 以英文语境下的主流模型为主 | 增加 Qwen、DeepSeek、Qwen-VL 等国产模型，以及 DeepSeekMoE、R1 / GRPO 等案例 |
+| 评估视角 | MMLU、HumanEval 等国际基准 | 补充 C-EVAL 等中文 benchmark，并接入作业 6 |
+| 运行环境 | 以课程配套的算力与环境为前提 | 面向国内网络与算力条件：云算力方案、CPU / Mac 调试建议、可离线阅读的 PDF 讲义 |
+| 内容生产 | — | 人工撰写定稿（AI 辅助翻译与整理）+ 交叉审校 + 内测/公测反馈修订，非 AI 批量生成 |
+
+> 由于中文版按工程流程重新编排，**章节编号与原版 lecture 并非一一对应**，学习时建议以本项目的章节顺序为准，阅读起来更丝滑哦~
+
+### 版本对应关系
+
+- **最初基于**：[Stanford CS336 Spring 2025](https://cs336.stanford.edu/spring2025/)（该届课程的归档主页），课程主线与作业 1–5 由此展开，对应原版 assignment 1–5。
+- **2026 年更新**：依据 [Stanford CS336 Spring 2026](https://cs336.stanford.edu/) 新版课程内容做了同步更新与补充；新版课表中的 RLVR、多模态等主题可对应本项目第 14、15 章。作业 6（模型评估）为中文版新增内容。
+- 本项目是社区自发的学习项目，与 Stanford 无官方隶属关系；原版讲义与作业材料见 [stanford-cs336/lectures](https://github.com/stanford-cs336/lectures/tree/main)。
 
 ## 📋 前置要求
 
@@ -30,21 +63,14 @@
 - **机器学习**：需对机器学习与深度学习的基础知识有扎实掌握
 - **GPU 编程（可选）**：了解 CUDA 基础概念会更佳，不懂也没关系，本项目也有入门教程
 
-## 📚 课程愿景
+## 🎯 学完能做什么
 
-- **硬核理论与动手实战并重**：我们会完整保留原版课程的技术深度，但会用更符合中文学习者思维的方式重构知识体系。对于必要的数学、深度学习前置知识，我们会帮你补齐，确保学习曲线平滑，让每个认真投入的人都能跟上。
-- **搭建一套循序渐进的知识体系**：将构建LLM这个庞大工程，拆解成一个个可以上手、可以理解的模块。学完后，你将拥有一个关于LLM的完整知识图谱。
-- **代码驱动，知行合一**：课程的核心是"用代码思考"。所有作业，我们不仅会提供实现代码，更会分享写下每一行代码时的思考过程。
-- **贴近国内环境的本土化改造**：考虑到国内的网络环境、大家手头的计算资源以及独特的开源生态，我们会提供更接地气的解决方案和案例（比如，多聊聊Qwen、DeepSeek等国产优秀模型）。
+这门课不停在"了解概念"：每个环节要么能动手做出来，要么能讲清设计取舍。
 
-## 🎯 项目意义
-
-学完这门课，你能得到什么？
-
-- **扎实的技术地基**：你将能亲手"造"出自己的LLM，对每个核心组件都了然于胸。
-- **宝贵的工程经验**：掌握从数据处理、模型训练到部署优化，堪比大厂的全流程实战技能。
-- **突出的行业竞争力**：具备大模型研发的核心能力，为你进入心仪的大厂或团队铺平道路。
-- **清晰的科研视野**：对LLM领域有体系化的认知，为未来深入研究打下坚实的基础。
+- **一个从零实现的语言模型，以及它的架构变体**：手写 BPE 分词器，实现 RoPE、RMSNorm、SwiGLU、AdamW 与训练循环；也能把 FFN 换成 Top-K 路由的 MoE，说清负载均衡与 DeepSeekMoE 的取舍（第 2、4、5 章）。
+- **把模型训得动、跑得快、推得省**：估算 FLOPs 与显存，用 Triton 实现 FlashAttention-2，搭起数据/模型并行；推理侧接上 KV Cache、投机解码、量化与连续批处理（第 3、6–8、10 章）。
+- **一条完整的数据、训练与对齐流水线**：把 Common Crawl 过滤、去重、脱敏后配成语料，完成 SFT、DPO / RLHF，再用可验证奖励的强化学习（GRPO / RLVR）训练数学推理，理解 R1 一类方案的训练路径（第 11、13、14 章）。
+- **会评估、会判断该做多大、会接多模态**：用 lm-evaluation-harness、evalscope 与 C-EVAL 做多维度评测，拟合 Scaling Laws 预测模型规模，并读懂从 CLIP / SigLIP 到 LLaVA、Qwen-VL 的多模态路线（第 9、12、15 章）。
 
 ## 📖 课程目录
 
@@ -66,7 +92,7 @@
 | [第13章 大模型的基本训练流程](docs/zh/chapter13/chapter13_第十三章大模型的基本训练流程.md) | Pre-training、SFT、DPO、RLHF PPO 流程、Alignment Tax | [作业5](coursework/assignment5-alignment/) | ✅ |
 | [第14章 可验证奖励的强化学习](docs/zh/chapter14/chapter14_可验证奖励的强化学习.md) | GRPO、Rule-based Verifier、Outcome/Process Reward、RLVR 与 R1 训练方案 | [作业5](coursework/assignment5-alignment/) | ✅ |
 | [第15章 多模态模型](docs/zh/chapter15/chapter15_多模态模型.md) | 从 CLIP 到 Omni Model：CLIP/SigLIP、LLaVA、Qwen-VL、Chameleon | - | ✅ |
-| [第16章 扩展内容](docs/zh/chapter16/) | 1. 什么是LLM推理？（黎又榛）<br>2. LLM 的未来 - Lecun（黎又榛、jiangyinhe、李盛康、徐虎）| - | 🔄 |
+| [第16章 扩展内容](docs/zh/chapter16/) | 1. 什么是LLM推理？（黎又榛）<br>2. LLM 的未来 - LeCun（黎又榛、jiangyinhe、李盛康、徐虎）| - | 🔄 |
 > 状态图例说明：✅ 已完成  🔄 更新中	📝 待完善	🚧 筹备中	 ⏸️ 暂缓	
 
 
@@ -137,15 +163,17 @@ diy-llm/
 
 ### PDF 版本下载
 
-本教程提供 PDF 版本，方便离线阅读和打印学习。为防止各类营销号加水印后贩卖给 LLM 的读者，我们特地在 PDF 文件中添加了不影响阅读的 Datawhale 开源标志水印，敬请谅解～
+本教程提供 PDF 版本，方便离线阅读和打印学习。为防止各类营销号加水印后贩卖给想学 LLM 的读者，我们特地在 PDF 文件中添加了不影响阅读的 Datawhale 开源标志水印，敬请谅解～
 
 > 📥 **Diy-LLM 课程讲义 PDF**: [https://github.com/datawhalechina/diy-llm/releases/latest/](https://github.com/datawhalechina/diy-llm/releases/latest/)
 
 ## 🔗 相关链接
 
 - **仓库地址**：https://github.com/datawhalechina/diy-llm
-- **在线阅读地址**：https://datawhalechina.github.io/diy-llm/
-- **原版课程主页**：[Stanford CS336 (Spring 2026)](https://cs336.stanford.edu/)
+- **在线阅读地址**：https://datawhalechina.github.io/diy-llm/（[English](https://datawhalechina.github.io/diy-llm/en/)）
+- **课程讲义 PDF**：https://github.com/datawhalechina/diy-llm/releases/latest/
+- **原版课程主页（当前版 · Spring 2026）**：https://cs336.stanford.edu/
+- **原版课程主页（归档 · Spring 2025，本项目最初基于的版本）**：https://cs336.stanford.edu/spring2025/
 - **原版课程项目**：https://github.com/stanford-cs336/lectures/tree/main
 
 ## ❓ 常见问题
@@ -159,7 +187,7 @@ diy-llm/
 <details>
 <summary><b>Q: 与原版 CS336 有什么区别？</b></summary>
 
-我们在保留原版技术深度的基础上，针对中文学习者进行了本土化改造，包括中文讲解、作业实现、更详细的参考内容来源、国产模型案例等。
+我们在保留原版技术深度的基础上，针对中文学习者进行了本土化改造，包括中文讲解、作业实现、更详细的参考内容来源、国产模型案例等。逐项对照见「我们做了哪些本土化改造」，两届原版课程的对应关系见「版本对应关系」。
 </details>
 
 ## 💬 读者交流群
@@ -213,31 +241,42 @@ diy-llm/
 
 - 感谢 [@aimetrics](https://github.com/aimetrics) 在[作业1 的 train.py](https://github.com/datawhalechina/diy-llm/blob/main/coursework/assignment1-basics/train.py) 中，增加了在 Macbook 设备上的 MPS 支持
 - 感谢[@FuTseYi](https://github.com/FuTseYi)(Datawhale成员)对网站迁移、部署和重构的支持
-- 感谢[@jiangyinhe](https://github.com/jiangyinhe)参与第 16 章扩展内容《LLM 的未来 - Lecun》的整理；基于中文版内容实现了第一章、前言的英文版翻译；
+- 感谢[@jiangyinhe](https://github.com/jiangyinhe)参与第 16 章扩展内容《LLM 的未来 - LeCun》的整理；基于中文版内容实现了第一章、前言的英文版翻译；
 - 感谢[@Excelius-Wang](https://github.com/Excelius-Wang) 补充 C-EVAL 中文 benchmark 的介绍，并接入到 assignment6 中
-
-*注：我们感谢每一位为项目做出贡献的开发者，也欢迎社区的小伙伴积极参与贡献！*
-
-我们欢迎所有形式的贡献！无论是文档改进、代码优化、bug修复还是新内容添加，都是对项目的宝贵支持。
 
 ### 如何贡献
 
-1. **报告问题**：如果发现文档错误、代码bug或改进建议，欢迎提交 [Issue](https://github.com/datawhalechina/diy-llm/issues)
-2. **提交代码**：Fork 本仓库，创建你的特性分支，提交更改后发起 Pull Request
-3. **完善文档**：帮助改进文档、翻译内容或添加示例
-4. **分享经验**：在讨论区分享学习心得和实践经验
+欢迎勘误、作业实现、内容补充、翻译与经验分享。**动手前请先读 [CONTRIBUTING.md](https://github.com/datawhalechina/diy-llm/blob/main/CONTRIBUTING.md)**，完整的提交流程、内容与代码规范、PR 自查清单都在那里。
 
-### 贡献指南
-
-- 提交代码前请确保代码风格一致
-- 添加新内容时请遵循现有的文档格式
-- 提交PR时请提供清晰的描述和变更说明
-- 欢迎在Issue中讨论大的改动方案
+最要紧的三条：小改动可直接提 [Issue](https://github.com/datawhalechina/diy-llm/issues) 或 PR，新章节与大改动先开 Issue 讨论；PR 要写清改了什么、依据和验证结果；可以用 AI 辅助，但提交内容必须自己通读、能解释、验证过——AI 批量生成、密集提交的 PR 会被要求合并说明或整体关闭，反复提交者不再接收。
 
 
-## 📝 更新日志
+## 🗓️ 版本与里程碑
 
-项目持续更新中，最新进展请查看 [GitHub Releases](https://github.com/datawhalechina/diy-llm/releases) 或提交记录。
+**整体进度**：`████████████████░░░░` 创作 → 内测 → 公测 → 二轮公测已完成，进入持续维护
+
+<table width="100%" cellpadding="8">
+  <tr>
+    <td bgcolor="#dafbe1" align="center" width="30%"><b>✅ 创作与打磨</b><br>2025.11 — 2026.02</td>
+    <td bgcolor="#ddf4ff" align="center" width="14%"><b>✅ 内测</b><br>2026.03.05</td>
+    <td bgcolor="#fbefff" align="center" width="14%"><b>✅ 公测</b><br>2026.04</td>
+    <td bgcolor="#fff8c5" align="center" width="16%"><b>✅ 二轮公测</b><br>2026.09</td>
+    <td bgcolor="#f6f8fa" align="center" width="26%"><b>🔄 持续维护</b><br>2026.10 — 至今</td>
+  </tr>
+</table>
+
+| 时间 | 里程碑 | 依据 |
+|------|--------|------|
+| 2025-11-24 | 仓库启动，从分词器章节开始创作 | `Initial commit` |
+| 2025-12 — 2026-01 | 内容创作高峰（12 月 186 次提交），作业实现陆续完成 | 提交「完成作业一」「完成作业」 |
+| 2026-03-05 | 内测 | 内测反馈修订 |
+| 2026-04 | 公测 | 公测反馈修订 |
+| 2026-06-10 | `V0.1`：讲义 PDF 上线 | tag `V0.1`、`add pdf download` |
+| 2026-07-26 | 补入 CS336 2026 新版内容 | 提交「修改第七章，新增2026内容」 |
+| 2026-08-17 | `V0.2`：讲义 PDF v2、读者交流群 | tag `V0.2`、`pdf v2 + reader communication` |
+| 2026-09 | 二轮公测 | 二轮公测反馈修订 |
+| 2026-10 — 至今 | 持续勘误：公式渲染、图示、表述 | 近两月 28 次提交 |
+
 
 ## 📄 许可证
 
@@ -249,8 +288,6 @@ diy-llm/
 
 - 感谢 Stanford CS336 课程团队提供优秀的原版课程
 - 特别感谢[@Sm1les](https://github.com/Sm1les)对本项目的帮助与支持
-- 感谢所有为项目做出贡献的开发者
-- 感谢开源社区的支持与反馈
 
 ## ⭐ Star History
 

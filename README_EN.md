@@ -15,12 +15,45 @@
 </div>
 
 <div align="center">
-  <p><a href="https://datawhalechina.github.io/diy-llm/en/">📚 Read Online</a></p>
-  <h3>📚 A Systematic Journey into Large Language Models</h3>
-  <p><em>An “LLM alchemy workshop” built for Chinese-speaking learners</em></p>
+  <p>
+    <a href="https://datawhalechina.github.io/diy-llm/en/"><img src="https://img.shields.io/badge/Read_Online-0969da?style=for-the-badge" alt="Read Online"></a>
+    <a href="https://github.com/datawhalechina/diy-llm/releases/latest/"><img src="https://img.shields.io/badge/PDF_Notes-2ea44f?style=for-the-badge" alt="PDF Notes"></a>
+    <a href="https://github.com/datawhalechina/diy-llm/tree/main/coursework"><img src="https://img.shields.io/badge/Assignment_Code-f59e0b?style=for-the-badge" alt="Assignment Code"></a>
+  </p>
+  <h3>📚 大模型是怎样炼成的 · How Large Language Models Are Forged</h3>
+  <p><em>From tokenizers, data, and training to systems optimization, inference, alignment, evaluation, and multimodal models: the full pipeline of building an LLM, connected into one knowledge system.</em></p>
 </div>
 
-We want this Chinese adaptation of CS336 to be more than a translated version of Stanford's original course. Our goal is to build an “LLM alchemy workshop” tailored to Chinese-speaking learners—a place where you forge your understanding, refine your code, master the training process, and ultimately create a large language model of your own.
+Training large models is often jokingly called "alchemy": data is the raw material, compute is the furnace, and hyperparameters all come down to feel. CS336 explains the process well, but the entry barrier is high; we spell out every "ingredient" and every step so that the folklore turns back into reproducible principles and code.
+
+## ✍️ Why This Project
+
+In Spring 2025, [Stanford CS336: Language Modeling from Scratch](https://cs336.stanford.edu/spring2025/) launched. The course is demanding, and learners in our community kept telling us the same thing: they wanted to study it, but the English lecture notes, the assumed prerequisites, and the assignment environment were real barriers. What they needed was a Chinese version they could actually understand and work through.
+
+So we brought together a group of contributors and spent over half a year on **writing → closed beta → public beta → chapter-by-chapter revision**. This is not a translation of the original. We reorganized the material around how Chinese-speaking learners study: added background explanations, wrote out assignment implementations, checked and expanded the reference sources, and brought in examples from models developed in China. AI was used to assist with translation and material organization, but every chapter was written and finalized by human contributors, cross-reviewed, and revised repeatedly based on closed-beta and public-beta feedback. **It is neither machine-translated nor AI-generated in bulk.** Each major chapter has a named author, and the whole text went through a full content review. We call it a course "with a human touch" — that is also where most of the time went.
+
+The course currently contains **16 chapters and 6 assignments**, coordinated by 3 project leads with contributions from many community members, and is continuously open to corrections (see "Contributors" below).
+
+### What We Changed from the Original
+
+| Dimension | Original CS336 | Diy-LLM (Chinese edition) |
+|-----------|----------------|---------------------------|
+| Knowledge structure | Follows lecture order and assumes math, PyTorch, and systems background | Reordered around the engineering pipeline of building an LLM; math, PyTorch, and GPU prerequisites are explained up front for a smoother learning curve |
+| Explanation | Lectures and notes in English | Written chapter by chapter in Chinese, with derivations, terminology, and common confusions unpacked, while keeping the original technical depth |
+| Assignments | Assignment handouts and tests | Six runnable implementations plus the reasoning behind the code; CPU debugging and MacBook MPS support added |
+| Reference sources | Lecture notes and paper pointers | More detailed references so readers can trace back to primary sources |
+| Models and examples | Mostly models from the English-speaking ecosystem | Qwen, DeepSeek, Qwen-VL, DeepSeekMoE, R1 / GRPO, and other cases from China's open-source ecosystem |
+| Evaluation | MMLU, HumanEval, and other international benchmarks | Chinese benchmarks such as C-EVAL added and integrated into Assignment 6 |
+| Runtime environment | Assumes the compute and environment provided by the course | Cloud GPU options, CPU / Mac debugging advice, and an offline PDF edition for readers in China |
+| How it was written | — | Human-written and finalized (AI-assisted translation and organization) + cross-review + beta feedback; not AI-generated in bulk |
+
+> Because the Chinese edition is reordered around the engineering pipeline, **chapter numbers do not map one-to-one to the original lectures**. We recommend following the chapter order used here.
+
+### Version Alignment
+
+- **Originally based on**: [Stanford CS336 Spring 2025](https://cs336.stanford.edu/spring2025/) (the archived site for that offering); the main storyline and Assignments 1–5 correspond to the original assignments 1–5.
+- **2026 update**: Synchronized with the new [Stanford CS336 Spring 2026](https://cs336.stanford.edu/) material; topics such as RLVR and multimodality in the new schedule correspond to Chapters 14 and 15 here. Assignment 6 (model evaluation) is new to this edition.
+- This is a community-run study project with no official affiliation with Stanford. Original lecture and assignment materials: [stanford-cs336/lectures](https://github.com/stanford-cs336/lectures/tree/main).
 
 ## 📋 Prerequisites
 
@@ -30,21 +63,14 @@ We want this Chinese adaptation of CS336 to be more than a translated version of
 - **Machine learning**: A solid grasp of the fundamentals of machine learning and deep learning
 - **GPU programming (optional)**: Familiarity with basic CUDA concepts is helpful but not required; this project also includes introductory material
 
-## 📚 Course Vision
+## 🎯 What You'll Be Able to Build
 
-- **A balance of rigorous theory and hands-on practice**: We retain the technical depth of the original course while reorganizing the material around the learning habits of Chinese-speaking students. We also cover essential mathematical and deep learning prerequisites to provide a smoother learning curve.
-- **A progressive knowledge system**: The large engineering challenge of building an LLM is broken down into approachable, understandable modules. By the end of the course, you will have a complete mental map of LLM construction.
-- **Code-driven learning**: The core philosophy of the course is to “think through code.” In addition to implementations for every assignment, we share the reasoning behind the code.
-- **Localization for the Chinese ecosystem**: We account for local network conditions, available computing resources, and the domestic open-source ecosystem, with practical solutions and examples involving excellent models such as Qwen and DeepSeek.
+This course does not stop at "understanding the concepts": for each stage, you either build it yourself or can explain the design trade-offs.
 
-## 🎯 What You Will Gain
-
-What can you expect after completing the course?
-
-- **A solid technical foundation**: You will be able to build your own LLM and understand every core component.
-- **Valuable engineering experience**: You will practice the full workflow—from data processing and model training to deployment and optimization.
-- **Stronger industry competitiveness**: You will develop the core skills required for large-model research and engineering roles.
-- **A clear research perspective**: You will gain a systematic understanding of the LLM field and a strong foundation for further research.
+- **A language model implemented from scratch, and its architectural variants**: hand-write a BPE tokenizer, implement RoPE, RMSNorm, SwiGLU, AdamW, and the training loop; swap the FFN for a Top-K-routed MoE and explain load balancing and the trade-offs behind DeepSeekMoE (Chapters 2, 4, 5).
+- **Make it trainable, fast, and cheap to serve**: estimate FLOPs and memory, implement FlashAttention-2 in Triton, set up data/model parallelism; on the inference side, work with KV cache, speculative decoding, quantization, and continuous batching (Chapters 3, 6–8, 10).
+- **A complete data, training, and alignment pipeline**: turn raw Common Crawl into a corpus through filtering, deduplication, and PII removal; run SFT and DPO / RLHF; then train mathematical reasoning with RLVR (GRPO) and understand the training path behind R1-style approaches (Chapters 11, 13, 14).
+- **Evaluate it, size it, and extend it to multimodality**: run multidimensional evaluation with lm-evaluation-harness, EvalScope, and C-EVAL; fit scaling laws to predict model scale; and read the multimodal path from CLIP / SigLIP to LLaVA and Qwen-VL (Chapters 9, 12, 15).
 
 ## 📖 Course Outline
 
@@ -143,8 +169,10 @@ A PDF edition is available for offline reading and printing. To discourage unaut
 ## 🔗 Related Links
 
 - **Repository**: https://github.com/datawhalechina/diy-llm
-- **Read online**: https://datawhalechina.github.io/diy-llm/
-- **Original course website**: [Stanford CS336 (Spring 2026)](https://cs336.stanford.edu/)
+- **Read online**: https://datawhalechina.github.io/diy-llm/en/ ([简体中文](https://datawhalechina.github.io/diy-llm/))
+- **Course notes PDF**: https://github.com/datawhalechina/diy-llm/releases/latest/
+- **Original course website (current · Spring 2026)**: https://cs336.stanford.edu/
+- **Original course website (archive · Spring 2025, the edition this project was first based on)**: https://cs336.stanford.edu/spring2025/
 - **Original course repository**: https://github.com/stanford-cs336/lectures/tree/main
 
 ## ❓ Frequently Asked Questions
@@ -158,18 +186,8 @@ Yes. You can study all theoretical material and debug parts of the assignments o
 <details>
 <summary><b>Q: How does this project differ from the original CS336 course?</b></summary>
 
-While preserving the technical depth of the original course, we have localized it for Chinese-speaking learners through Chinese explanations, assignment implementations, more detailed references, and examples featuring models developed in China.
+While preserving the technical depth of the original course, we have localized it for Chinese-speaking learners through Chinese explanations, assignment implementations, more detailed references, and examples featuring models developed in China. See "What We Changed from the Original" for a point-by-point comparison and "Version Alignment" for how the two CS336 offerings map to this project.
 </details>
-
-## 💬 Reader Community
-
-Join the Diy-LLM reader groups to study, exchange ideas, and help one another. If you would like to join, please add one of the coordinators below on WeChat and include “diy-llm” in your verification message.
-
-| Coordinator | WeChat ID |
-|-------------|-----------|
-| Hu Xu | `xuhu96736` |
-| Youzhen Li | `zydsx111` |
-| Shengkang Li | `muzichengminguangli` |
 
 ## 👥 Contributors
 
@@ -204,27 +222,41 @@ Join the Diy-LLM reader groups to study, exchange ideas, and help one another. I
 - Thanks to [@jiangyinhe](https://github.com/jiangyinhe) for helping prepare Chapter 16's extended topic “The Future of LLMs—LeCun,” and for translating the Foreword and Chapter 1 into English from the Chinese material.
 - Thanks to [@Excelius-Wang](https://github.com/Excelius-Wang) for adding an introduction to the C-EVAL Chinese benchmark and integrating it into Assignment 6.
 
-*We appreciate every developer who has contributed to this project, and we welcome community members to get involved!*
-
-Contributions of all kinds are welcome. Improvements to the documentation, code optimizations, bug fixes, and new content are all valuable to the project.
-
 ### How to Contribute
 
-1. **Report issues**: If you find documentation errors, bugs, or opportunities for improvement, please open an [Issue](https://github.com/datawhalechina/diy-llm/issues).
-2. **Submit code**: Fork the repository, create a feature branch, commit your changes, and open a Pull Request.
-3. **Improve the documentation**: Help refine existing material, translate content, or add examples.
-4. **Share your experience**: Post your learning notes and practical experience in the discussions area.
+Corrections, assignment implementations, new content, translations, and shared experience are all welcome. **Before you start, please read [CONTRIBUTING.md](https://github.com/datawhalechina/diy-llm/blob/main/CONTRIBUTING.md)** for the full submission workflow, content and code conventions, and the PR self-check list.
 
-### Contribution Guidelines
+Three things that matter most: small fixes can go straight to an [Issue](https://github.com/datawhalechina/diy-llm/issues) or a PR, while new chapters and major changes should be discussed in an Issue first; PRs should state what changed, the evidence, and what you verified; AI assistance is allowed, but you must have read, understood, and verified the submission yourself — bulk AI-generated or densely submitted PRs will be asked to consolidate or will be closed, and repeated bulk submissions will no longer be accepted.
 
-- Keep the code style consistent with the existing project.
-- Follow the current documentation format when adding new content.
-- Provide a clear description and change summary in each Pull Request.
-- For substantial changes, discussion in an Issue is encouraged before implementation.
+## 🗓️ Versions & Milestones
 
-## 📝 Changelog
+**Overall progress**: `████████████████░░░░` Writing → closed beta → public beta → second public beta complete; now in continuous maintenance
 
-The project is under continuous development. See [GitHub Releases](https://github.com/datawhalechina/diy-llm/releases) or the commit history for the latest updates.
+<table width="100%" cellpadding="8">
+  <tr>
+    <td bgcolor="#dafbe1" align="center" width="30%"><b>✅ Writing &amp; Revision</b><br>2025.11 — 2026.02</td>
+    <td bgcolor="#ddf4ff" align="center" width="14%"><b>✅ Closed Beta</b><br>2026.03.05</td>
+    <td bgcolor="#fbefff" align="center" width="14%"><b>✅ Public Beta</b><br>2026.04</td>
+    <td bgcolor="#fff8c5" align="center" width="16%"><b>✅ 2nd Public Beta</b><br>2026.09</td>
+    <td bgcolor="#f6f8fa" align="center" width="26%"><b>🔄 Maintenance</b><br>2026.10 — present</td>
+  </tr>
+</table>
+
+Dates come from the commit history and version tags (757 commits, `V0.1` / `V0.2`), with beta dates taken from project test records:
+
+| Date | Milestone | Evidence |
+|------|-----------|----------|
+| 2025-11-24 | Repository created; writing started with the tokenizer chapter | `Initial commit` |
+| 2025-12 — 2026-01 | Peak writing period (186 commits in December); assignment implementations completed | Commits "完成作业一", "完成作业" |
+| 2026-03-05 | Closed beta | Closed-beta feedback revisions |
+| 2026-04 | Public beta | Public-beta feedback revisions |
+| 2026-06-10 | `V0.1`: PDF notes released | tag `V0.1`, `add pdf download` |
+| 2026-07-26 | Content from CS336 2026 added | Commit "修改第七章，新增2026内容" |
+| 2026-08-17 | `V0.2`: PDF notes v2, reader groups | tag `V0.2`, `pdf v2 + reader communication` |
+| 2026-09 | Second public beta | Second-beta feedback revisions |
+| 2026-10 — present | Ongoing corrections: formula rendering, figures, wording | 28 commits in the last two months |
+
+See [GitHub Releases](https://github.com/datawhalechina/diy-llm/releases) for the current version and PDF notes, "Why This Project" above for the writing and review process, and "Course Outline" for per-chapter status.
 
 ## 📄 License
 
@@ -236,8 +268,6 @@ This work is licensed under the [Creative Commons Attribution-NonCommercial-Shar
 
 - Thanks to the Stanford CS336 course team for creating the excellent original course.
 - Special thanks to [@Sm1les](https://github.com/Sm1les) for helping and supporting this project.
-- Thanks to every developer who has contributed to the project.
-- Thanks to the open-source community for its support and feedback.
 
 ## ⭐ Star History
 
