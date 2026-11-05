@@ -66,7 +66,7 @@
 | [第13章 大模型的基本训练流程](docs/zh/chapter13/chapter13_第十三章大模型的基本训练流程.md) | Pre-training、SFT、DPO、RLHF PPO 流程、Alignment Tax | [作业5](coursework/assignment5-alignment/) | ✅ |
 | [第14章 可验证奖励的强化学习](docs/zh/chapter14/chapter14_可验证奖励的强化学习.md) | GRPO、Rule-based Verifier、Outcome/Process Reward、RLVR 与 R1 训练方案 | [作业5](coursework/assignment5-alignment/) | ✅ |
 | [第15章 多模态模型](docs/zh/chapter15/chapter15_多模态模型.md) | 从 CLIP 到 Omni Model：CLIP/SigLIP、LLaVA、Qwen-VL、Chameleon | - | ✅ |
-| [第16章 扩展内容](docs/zh/chapter16/) | 1. 什么是LLM推理？（黎又榛）<br>2. LLM 的未来 - Lecun（黎又榛、jiangyinhe、李盛康、徐虎）| - | 🔄 |
+| [第16章 扩展内容](docs/zh/chapter16/) | 1. 什么是LLM推理？（黎又榛）<br>2. LLM 的未来 - Lecun（黎又榛、jiangyinhe、李盛康、徐虎）<br>3. 异构注意力机制 - RWKV、Mamba、DeltaNet 与 DiffusionLM（飞龙） | - | 🔄 |
 > 状态图例说明：✅ 已完成  🔄 更新中	📝 待完善	🚧 筹备中	 ⏸️ 暂缓	
 
 
