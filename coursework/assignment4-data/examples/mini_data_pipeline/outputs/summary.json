@@ -1,0 +1,88 @@
+{
+  "source": {
+    "dataset": "Salesforce/wikitext",
+    "config": "wikitext-2-raw-v1",
+    "split": "train",
+    "dataset_card": "https://huggingface.co/datasets/Salesforce/wikitext",
+    "sample_file": "wikitext2_train_sample.jsonl",
+    "sample_rows": 500,
+    "sample_sha256": "4d97d538c24e42ed8a4f91341a1014772d0399665c1ed8d3d793d8dd98f598b3",
+    "sample_offsets": [
+      0,
+      9000,
+      18000,
+      27000,
+      36000
+    ],
+    "rows_per_offset": 100
+  },
+  "rules": {
+    "normalization": "合并连续空白，并移除空行",
+    "deduplication": "空白规范化后全文 casefold 比对，保留首次出现的行",
+    "quality_filter": {
+      "remove_wiki_headings": true,
+      "minimum_space_delimited_tokens": 5,
+      "minimum_alphanumeric_characters": 40
+    }
+  },
+  "stages": [
+    {
+      "name": "normalize_and_remove_empty",
+      "before": {
+        "records": 500,
+        "characters": 153886,
+        "utf8_bytes": 154315,
+        "space_delimited_tokens": 29185
+      },
+      "after": {
+        "records": 367,
+        "characters": 152785,
+        "utf8_bytes": 153214,
+        "space_delimited_tokens": 29185
+      },
+      "removed_records": 133
+    },
+    {
+      "name": "case_insensitive_exact_deduplication",
+      "before": {
+        "records": 367,
+        "characters": 152785,
+        "utf8_bytes": 153214,
+        "space_delimited_tokens": 29185
+      },
+      "after": {
+        "records": 363,
+        "characters": 152729,
+        "utf8_bytes": 153158,
+        "space_delimited_tokens": 29165
+      },
+      "removed_records": 4
+    },
+    {
+      "name": "quality_filter",
+      "before": {
+        "records": 363,
+        "characters": 152729,
+        "utf8_bytes": 153158,
+        "space_delimited_tokens": 29165
+      },
+      "after": {
+        "records": 214,
+        "characters": 147894,
+        "utf8_bytes": 148296,
+        "space_delimited_tokens": 28029
+      },
+      "removed_records": 149
+    }
+  ],
+  "duplicates_removed": 4,
+  "cleaned_output": {
+    "file": "cleaned.jsonl",
+    "records": 214,
+    "characters": 147894,
+    "utf8_bytes": 148296,
+    "space_delimited_tokens": 28029,
+    "file_bytes": 151498
+  }
+}
+
