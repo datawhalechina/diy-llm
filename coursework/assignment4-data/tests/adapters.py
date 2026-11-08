@@ -124,13 +124,13 @@ def run_mask_emails(text: str) -> tuple[str, int]:
 def run_mask_phone_numbers(text: str) -> tuple[str, int]:
 
     phone_pattern = re.compile(
-        r'''
-        \b
+        r"""
+        (?<!\w)
         (?:\+?1[\s.-]?)?          # 可选国家码
-        (?:\(?\d{3}\)?[\s.-]?)    # 区号
+        (?:\(?\d{3}\)?[\s.-]?)    # 区号（括号可有可无）
         \d{3}[\s.-]?\d{4}         # 主号码
-        \b
-        ''',
+        (?!\w)
+        """,
         re.VERBOSE
     )
 
