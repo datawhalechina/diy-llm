@@ -231,7 +231,7 @@ $$
 残差（Residual） 在深度学习中特指**残差连接**（Residual Connection），也称为**跳跃连接**（Skip Connection），是连接神经网络层与层之间的"捷径"，让信息可以直接绕过某些层传递。
 
 <div align="center">
-  <img src="./images/4-3-Add&amp;Norm.png" alt="Add&amp;Norm" width="800">
+  <img src="./images/4-3-Add&Norm.png" alt="Add&amp;Norm" width="800">
   <p><em>图 3. Add&amp;Norm</em></p>
 </div>
 
@@ -341,7 +341,7 @@ ReLU的**计算高效**，相比Sigmoid/Tanh，ReLU的导数计算简单（0或1
 ### 3.1 归一化
 
 <div align="center">
-  <img src="./images/4-6-Per&amp;PostNorm.png" alt="Per&amp;PostNorm" width="800">
+  <img src="./images/4-6-Per&PostNorm.png" alt="Per&amp;PostNorm" width="800">
   <p><em>图 6. Per&amp;PostNorm</em></p>
 </div>
 
@@ -366,7 +366,7 @@ $$
 它具有明显优势：**避免了 Post-LN 因归一化位于残差流内部而引发的梯度不稳定问题**，使得移除复杂的学习率预热成为可能，并支持**极深网络**（100+ 层）。目前已成为 GPT-3、PaLM 等大模型的默认配置。但 Pre-LN 本身并非没有稳定性挑战；近期研究发现持续的大规模激活等问题，这也推动了后文将讨论的“双重归一化”等变体。
 
 <div align="center">
-  <img src="./images/4-7-post&amp;perNormData.png" alt="post&amp;perNormData" width="800">
+  <img src="./images/4-7-post&perNormData.png" alt="post&amp;perNormData" width="800">
   <p><em>图 7. post&amp;perNormData</em></p>
 </div>
 
@@ -477,7 +477,7 @@ FFN去除偏置项b的理由几乎和RMSNorm一致，去除偏置项的想法广
 从transformer或者深度学习这个概念被发明起，大家都热衷于改进其中的激活函数，有一大堆激活函数——ReLU、GeLU、Swish、ELU、GeGLU。有不同类型的MLP——GeGLU、ReGLU、SeLU、SwiGLU和LiGLU。这些是什么？人们使用它干什么，这又有多重要？
 
 <div align="center">
-  <img src="./images/4-9-ReLU&amp;GeLU.png" alt="ReLU&amp;GeLU" width="800">
+  <img src="./images/4-9-ReLU&GeLU.png" alt="ReLU&amp;GeLU" width="800">
   <p><em>图 12. ReLU&amp;GeLU</em></p>
 </div>
 
@@ -782,7 +782,7 @@ MQA/GQA 的核心贡献在于：通过让多个查询头共享同一组 Key/Valu
 **稀疏 / 滑动窗口注意力**
 
 <div align="center">
-  <img src="./images/4-16-sparse&amp;structuredAttention.png" alt="sparse&amp;structuredAttention" width="800">
+  <img src="./images/4-16-sparse&structuredAttention.png" alt="sparse&amp;structuredAttention" width="800">
   <p><em>图 19. sparse&amp;structuredAttention</em></p>
 </div>
 
@@ -993,7 +993,7 @@ $$
 观察现有模型会发现，许多都遵循这个经验法则，**(8/3)约等于2.66**.
 
 <div align="center">
-  <img src="./images/4-23-d_ff&amp;d_model.png" alt="d_ff&amp;d_model" width="800">
+  <img src="./images/4-23-d_ff&d_model.png" alt="d_ff&amp;d_model" width="800">
   <p><em>图 29. d_ff&amp;d_model</em></p>
 </div>
 
@@ -1035,7 +1035,7 @@ Bhojanapalli等人2020年的研究，他们提出如果注意力头数量不断�
 我们的模型应该是要**深度还是宽度**？要多深和多宽？
 
 <div align="center">
-  <img src="./images/4-27-wide&amp;deep.png" alt="wide&amp;deep" width="800">
+  <img src="./images/4-27-wide&deep.png" alt="wide&amp;deep" width="800">
   <p><em>图 33. wide&amp;deep</em></p>
 </div>
 
@@ -1046,7 +1046,7 @@ Bhojanapalli等人2020年的研究，他们提出如果注意力头数量不断�
 抛开这些限制，我们可以抽象思考：宽深比对模型性能有何影响？Kaplan等人再次提供了很好的可视化展示。这是三个不同规模的数据——5000万、2.74亿和15亿参数。横轴是宽深比，纵轴是损失差异的百分比变化。可以看到在**100左右出现了不同规模下的最小值**。
 
 <div align="center">
-  <img src="./images/4-28-wide&amp;deep_exp.png" alt="wide&amp;deep_exp" width="800">
+  <img src="./images/4-28-wide&deep_exp.png" alt="wide&amp;deep_exp" width="800">
   <p><em>图 34. wide&amp;deep_exp</em></p>
 </div>
 

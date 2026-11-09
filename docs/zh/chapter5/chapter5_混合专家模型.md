@@ -276,7 +276,7 @@ class TC_MoE(nn.Module):
         return out
 ```
 
-**以上展示的是Top-K TC混合专家的关键板块，运行的代码在[Top-K TC](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter5/Top-K%20TC.py)。**
+**以上展示的是Top-K TC混合专家的关键板块，运行的代码在[Top-K TC](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter5/Top-K%20TC.py)。**
 
 TC_MoE(dim=32, num_experts=10, k=2)，输入文本：
 > "MoE是很强大的机制！", "专家混合模型非常高效。"
@@ -378,7 +378,7 @@ class EC_MoE(nn.Module):
         return out
 ```
 
-**以上展示的是Top-K EC混合专家的关键板块，运行的代码在[Top-K EC](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter5/Top-K%20EC.py)。**
+**以上展示的是Top-K EC混合专家的关键板块，运行的代码在[Top-K EC](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter5/Top-K%20EC.py)。**
 
 EC_MoE(dim=32, num_experts=10, k=2)，输入文本：
 > "MoE是很强大的机制！", "专家混合模型非常高效。"
@@ -395,7 +395,7 @@ EC_MoE(dim=32, num_experts=10, k=2)，输入文本：
 
 **TC vs EC** ：
 
-通过运行两段代码[Top-K EC](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter5/Top-K%20EC.py)和[Top-K TC](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter5/Top-K%20TC.py)，直观比较两种路由策略的差异。
+通过运行两段代码[Top-K EC](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter5/Top-K%20EC.py)和[Top-K TC](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter5/Top-K%20TC.py)，直观比较两种路由策略的差异。
 
 1. `在TC模式下`，每个token主动选择自己最合适的Top-K专家像“学生找导师”。优势是每个token都会被至少尝试分配到专家上，因此语义完整性较高，减少了信息丢失的风险。缺点问题是专家`负载不均衡`，少数“热门”专家会处理绝大部分token，得到充分训练并显著优于其他专家，而大量“冷门”专家长期闲置能力停滞。`这种差距导致模型出现“偏科”现象在即高频领域表现良好，而在低频领域能力不足`。
 2. `在EC模式下`，每个专家主动从所有token中挑选自己最想处理的Top-K像“导师挑学生”。这种机制天然约束了每个专家的处理量（招生名额），从而显著缓解或消除专家负载不均衡，有利于专家能力的均衡提升。但代价是部分token可能完全未被任何专家处理（被丢弃），导致语义信息缺失或上下文片段被跳过，`从而增加模型在理解、推理时出现断章取义或错误的风险从而降低LLM最后的表现能力`。
@@ -1037,7 +1037,7 @@ class MiniMoELLModel(nn.Module):
 >
 > 应用层归一化（LayerNorm）作为进入最终预测头lm_head之前的标准步骤，其核心作用是稳定和规范化模型输出的隐藏表示 $x$ 。它对每个Token embedding的d_model维度特征进行不同样本的独立归一化，确保输入到最终线性投影层的特征 $x$ 具有近似一致的尺度和分布。这种规范化效应不仅能显著稳定模型的训练过程，允许使用更高的学习率，从而加快收敛速度，还能帮助lm_head更准确地将统一尺度的特征映射回词汇表（logits），最终提高LLM的预测精度。
 
-**以上是MoE在mini LLM应用的关键模块代码展示，完整可运行代码在[Mini LLM+MoE](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter5/Mini%20LLM%2BMoE.py)**
+**以上是MoE在mini LLM应用的关键模块代码展示，完整可运行代码在[Mini LLM+MoE](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter5/Mini%20LLM%2BMoE.py)**
 
 ---
 
@@ -1158,13 +1158,13 @@ DeepSeekMoE一种创新的专家混合模型，其目标是实现**极致的专�
 - [Nemotron 3 Super 120B A12B](https://arxiv.org/abs/2604.12374)
 - [Kimi团队基于KDA实现的Kimi linear 48B A3B model](https://huggingface.co/moonshotai/Kimi-Linear-48B-A3B-Instruct/blob/main/modeling_kimi.py)
 - [FlashAttention 优化 Attention Kernel 提升 GPU 利用率、PagedAttention 改进 KV Cache 内存管理](https://datawhalechina.github.io/diy-llm/chapter6/chapter6_%E7%AC%AC%E5%85%AD%E7%AB%A0GPU%E5%92%8CGPU%E7%9B%B8%E5%85%B3%E7%9A%84%E4%BC%98%E5%8C%96.html)
-- [Top-K TC](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter5/Top-K%20TC.py)
-- [Top-K EC](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter5/Top-K%20EC.py)
+- [Top-K TC](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter5/Top-K%20TC.py)
+- [Top-K EC](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter5/Top-K%20EC.py)
 - [辅助负载均衡](https://yangyutu.github.io/llm_book.github.io/docs/chapter_LLM_arch/LLM_moe_sparse_architectures.html)
 - [容量控制 + expert capacity + overflow机制](https://mljourney.com/mixture-of-experts-moe-routing-algorithms-for-sparse-llms)
 - [动态、无辅助损失的负载均衡](https://www.emergentmind.com/papers/2408.15664)
 - [改善路由器、相似度保持路由](https://arxiv.org/abs/2506.14038)
 - [改进专家结构、路由机制](https://arxiv.org/abs/2511.10971)
 - [LSH](https://proceedings.neurips.cc/paper_files/paper/2024/file/61674667d642ae52f6bb281bea90ee29-Paper-Conference.pdf)
-- [Mini LLM+MoE](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter5/Mini%20LLM%2BMoE.py)
+- [Mini LLM+MoE](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter5/Mini%20LLM%2BMoE.py)
 - [DeepSeek V4则直接在浅层引入了3层Hash MoE（非学习路由）替代以往Dense层](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/blob/main/config.json)
