@@ -131,7 +131,11 @@ CPU 上可先使用 `--batch_size 8` 提高吞吐；如果内存不足，将其�
 
 C-Eval 题库采用 CC BY-NC-SA 4.0 许可，使用时请保留[官方仓库](https://github.com/hkust-nlp/ceval)、[数据集](https://huggingface.co/datasets/ceval/ceval-exam)和论文引用信息，不要将题库复制进本仓库。
 
-#### 3. evalscope演示
+#### 3. M3KE 中文 benchmark 接入
+
+新增 [M3KE 高中语文子集接入说明](./m3ke/README.md)，提供 lm-evaluation-harness 外部 YAML 任务、数据加载器和复现命令。示例使用 5 条有标签的 dev 样本验证流程；不要把该 smoke test 分数当作完整 M3KE 成绩。
+
+#### 4. evalscope演示
 
 ```python
 # 运行evalscope演示
