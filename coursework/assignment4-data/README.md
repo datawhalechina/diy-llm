@@ -32,3 +32,8 @@
 其中作业的全部流程都在`assignment4-data/cs336_data/作业一.ipynb`和 `assignment4-data/cs336_data/作业二.ipynb`，里面有讲解和代码，其中我们供读者跑通基础作业：
 
 只需运行`cs336_systems/作业1.ipynb`和`cs336_systems/作业2.ipynb`就可以跑通流程，其他文件都是这两个文件生成的，不需要理会。
+
+## 小型数据过滤与去重案例
+
+新增可独立运行的 WikiText-2 小型案例，展示空白规范化、精确去重、质量过滤及各阶段数据量统计。操作步骤、样本来源和授权说明见 [examples/mini_data_pipeline/README.md](./examples/mini_data_pipeline/README.md)。
+

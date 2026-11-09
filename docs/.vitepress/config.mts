@@ -100,7 +100,7 @@ const zhNav = [
     items: [
       { text: '第16章 扩展内容', items: [
         { text: '1. 什么是LLM推理？', link: '/chapter16/chapter16_什么是LLM推理' },
-        { text: '2. LLM 的未来 - Lecun', link: '/chapter16/chapter16_LLM的未来LeCun' },
+        { text: '2. LLM 的未来 - LeCun', link: '/chapter16/chapter16_LLM的未来LeCun' },
       ]},
     ],
   },
@@ -129,7 +129,7 @@ const zhSidebar = {
         { text: '第15章 多模态模型', link: '/chapter15/chapter15_多模态模型' },
         { text: '第16章 扩展内容', items: [
           { text: '1. 什么是LLM推理？', link: '/chapter16/chapter16_什么是LLM推理' },
-          { text: '2. LLM 的未来 - Lecun', link: '/chapter16/chapter16_LLM的未来LeCun' },
+          { text: '2. LLM 的未来 - LeCun', link: '/chapter16/chapter16_LLM的未来LeCun' },
         ]},
       ],
     },
