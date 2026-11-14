@@ -72,6 +72,10 @@ pip install -e .[math]
 # 3. 安装evalscope
 pip install evalscope
 pip install 'evalscope[app]' -U  # 可视化依赖
+
+# 4. 本地模型推理依赖（evalscope_demo.py 用 openai-community/gpt2 时必需，
+#    pip install evalscope 不会自动带上）
+pip install torch accelerate
 ```
 
 ### 开始学习
@@ -137,6 +141,32 @@ C-Eval 题库采用 CC BY-NC-SA 4.0 许可，使用时请保留[官方仓库](ht
 # 运行evalscope演示
 python evalscope_demo.py
 ```
+
+## ❓ 常见问题（FAQ）
+
+以下问题在 evalscope 1.15.0、Python 3.11、Windows（CPU）环境下实测遇到并解决。
+
+### 1. 直接运行 `evalscope_demo.py` 报 `Cannot reuse cache ...`
+
+- **现象**：`ValueError: Cannot reuse cache for data_collection: Cached evaluation identity does not match the current run (previous=unknown, current=sha256:...)`
+- **原因**：新版 evalscope 会校验 `use_cache` 目录的评测身份（配置哈希）。仓库自带的 `outputs/20260119_232050` 由旧版本生成，身份校验无法通过。
+- **解决**：注释掉 `evalscope_demo.py` 中的 `use_cache=...` 一行；如需复用缓存，请改为你本次运行生成的 `outputs/<时间戳>` 目录。
+
+### 2. 报 `ImportError: torch not found`，补装后又报 `requires accelerate`
+
+- **现象**：`ImportError: torch not found. Please run pip install torch`，安装 torch 后再次运行，又在加载模型时报 `Using a device_map ... requires accelerate`
+- **原因**：`pip install evalscope` 不包含本地模型推理的依赖（torch、accelerate）。
+- **解决**：`pip install torch accelerate`。只做 gpt2 演示可装 CPU 版：`pip install torch --index-url https://download.pytorch.org/whl/cpu`
+
+### 3. 注释 `use_cache` 后用 gpt2 跑混合集报 `IndexError: index out of range in self`
+
+- **现象**：采样与数据加载正常，模型前向阶段在 embedding 层抛 `IndexError: index out of range in self`，进程退出
+- **原因**：gpt2 的上下文长度与词表都很小，混合集里的 aime25 等超长样本编码后越界（见 [Issue #87](https://github.com/datawhalechina/diy-llm/issues/87) 的同类反馈）
+- **解决**：任选其一：① 换上下文更大的评测模型（如脚本注释中的 qwen2.5 系列）；② 从 `CollectionSchema` 中临时移除 aime25 后演示；③ 使用与缓存生成时相同版本的 evalscope 并配合 `use_cache` 回放。
+
+### 4. Hugging Face 模型 / 数据集下载慢或超时
+
+- **解决**：设置镜像后运行。Linux/macOS：`export HF_ENDPOINT=https://hf-mirror.com`；Windows PowerShell：`$env:HF_ENDPOINT="https://hf-mirror.com"`
 
 ## 📝 使用建议
 
