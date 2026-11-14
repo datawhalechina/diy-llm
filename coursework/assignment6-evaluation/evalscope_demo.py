@@ -54,7 +54,11 @@ task_cfg = TaskConfig(
     generation_config={
         'temperature': 0.0 # 评测通常设为 0 以保证结果可复现
     },
-    use_cache="outputs/20260119_232050", # 复用本地缓存路径的推理结果和评测结果
+    # use_cache 用于复用本地已有推理与评测结果。仓库自带的 outputs/20260119_232050
+    # 是旧版本 evalscope 生成的示例缓存：新版会校验缓存身份，直接复用会报
+    # "Cached evaluation identity does not match the current run"。
+    # 新环境请保持注释，或改为你本次运行生成的 outputs/<时间戳> 目录。
+    # use_cache="outputs/20260119_232050",
 )
 
 run_task(task_cfg=task_cfg)
