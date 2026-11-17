@@ -56,7 +56,7 @@ $$
 
 这里 $10000^{2i / d_{\text{model}}}$ 决定了不同维度上的波长，从而形成一个多尺度的编码体系：低维度（小 $i$）对应高频，可以精细区分相邻位置；高维度（大 $i$）对应低频，能够覆盖较远距离的相对关系。最终，每个位置都会得到一个与词向量维度相同的编码向量，二者相加后作为模型输入。
 
-这种设计带来了几个显著的优势。首先，它完全确定，**无需额外参数**，避免了增加模型复杂度或引入训练中的位置嵌入过拟合问题。其次，通过三角函数的周期性，编码值被约束在 $[-1, 1]$ 之间，数值稳定，易于与词向量相加。更重要的是，它**天然支持相对位置的建模**：对于任意固定的偏移量 $k$，存在一个只依赖于 $k$、不依赖于 $pos$ 的分块对角矩阵 $M_k$，使得 $PE(pos+k)=M_k\cdot PE(pos)$；其几何含义是每一对 $(\sin,\cos)$ 维度在二维平面上发生一次旋转，旋转角度由 $k$ 和该对维度的频率共同决定。这使得自注意力机制更容易学习到序列中元素的相对位置关系，而非仅仅绝对位置。这一特性在处理变长序列和捕捉局部依赖时尤为关键。
+这种设计带来了几个显著的优势。首先，它完全确定，**无需额外参数**，避免了增加模型复杂度或引入训练中的位置嵌入过拟合问题。其次，通过三角函数的周期性，编码值被约束在 $[-1, 1]$ 之间，数值稳定，易于与词向量相加。更重要的是，它**天然支持相对位置的建模**：对于任意固定的偏移量 $k$，存在一个只依赖于 $k$、不依赖于 $pos$ 的分块对角矩阵 $M_k$，使得 $PE(pos+k)=M_k\cdot PE(pos)$。见 [《Attention Is All You Need》](https://arxiv.org/abs/1706.03762)。其几何含义是每一对 $(\sin,\cos)$ 维度在二维平面上发生一次旋转，旋转角度由 $k$ 和该对维度的频率共同决定；多个维度对对应多个频率上的分块旋转，因此该线性变换可写成分块对角矩阵 $M_k$。这使得自注意力机制更容易学习到序列中元素的相对位置关系，而非仅仅绝对位置。这一特性在处理变长序列和捕捉局部依赖时尤为关键。
 
 正余弦位置编码最早在《Attention Is All You Need》中提出，作为原始 Transformer 的标准位置编码方案。尽管后来出现了可学习的位置嵌入、相对位置编码等变体，但正余弦编码因其简单、高效且无需训练的特性，仍在许多序列建模场景中被广泛使用或作为理解位置编码机制的经典范例。
 
@@ -99,7 +99,11 @@ $$
 
 **多头注意力的设计思想**
 
-多头注意力通过将 $d_{model}$ 维的查询、键、值拆分为 $h$ 个独立的头，每个头在更低维的空间（$d_k = d_{model} / h$）中并行执行注意力计算，从而使模型能够从多个表示子空间中联合提取信息。每个头都有自己的投影矩阵，可以关注到不同类型的特征，例如（这只是个例子，我们无法确定每个头的分工） **有的头可能聚焦局部语法结构，有的头则捕捉远距离语义依赖**。
+多头注意力通过将 $d_{model}$ 维的查询、键、值拆分为 $h$ 个独立的头，每个头在更低维的空间（$d_k = d_{model} / h$）中并行执行注意力计算，从而使模型能够从多个表示子空间中联合提取信息。
+
+每个头都有自己的投影矩阵，可以关注到不同类型的特征。这种“头特化”（head specialization）现象已有系统的实证研究支撑。[Voita et al., 2019](https://aclanthology.org/P19-1580/) 对 Transformer 编码器多头自注意力进行逐头分析后发现，最重要且置信度最高的头往往承担**一致的、在语言学上可解释的角色**；
+
+而[Clark et al., 2019](https://aclanthology.org/W19-4808/) 对 BERT 注意力的分析也发现，不同的头会分别关注分隔符、特定位置偏移、整句范围等模式，并且**部分头与句法关系（如动词的直接宾语、介词宾语）和共指关系高度对应**，某些头在这些任务上的准确率相当高。当然，具体哪个头负责哪种模式仍然依赖于训练数据和模型配置，**并非每个头都必然具有清晰的语言学功能**；但多头通过并行子空间可能形成功能分工这一设计直觉，已有实证文献支持。
 
 **多头注意力的具体计算过程**
 
@@ -149,7 +153,9 @@ $$
 - 每个头的维度 $d_k = d_v = d_{model} / h = 64$
 - 缩放因子 $\sqrt{d_k} = \sqrt{64} = 8$
 
-这种设置使得多头注意力的计算量与单头注意力相近（每个头在低维空间计算，总计算量基本不变），但显著提升了模型的表示能力。
+这种设置使得多头注意力的计算量与单头注意力相近：由于每个头的维度降至 $d_k=d_{model}/h$，多头注意力的总计算复杂度与在全维 $d_{model}$ 上运行的单头注意力处于同一量级。这一结论在原始论文中有对应。
+
+换言之，多头并没有通过增加总计算量来换取表示能力；它在基本相同的计算预算下，将表示空间拆分为多个低维子空间，从而获得更丰富的注意力模式。在标准设置 $h=8$、$d_k=d_{model}/h=64$ 下，这一“成本相近、表示更丰富”的设计权衡是 Transformer 架构选择多头注意力的核心依据之一。
 
 **提问：为什么要多头而不是单头**
 
@@ -167,9 +173,9 @@ $$
 
 **提问：为什么要除 $\sqrt{d_k}$**
 
-**答**：原始论文中推测 $d_k$ 值较大时，点积的绝对值会变得很大，这会将 $softmax$ 函数推入梯度极小的区域，为了抵消这种影响，我们对点积进行 $1/\sqrt{d_k}$ 的缩放。
+**答**：原论文[《Attention Is All You Need》](https://arxiv.org/abs/1706.03762)中解释这一缩放的必要性可以从方差角度严格理解：若 $Q,K$ 的各分量独立且零均值、单位方差，则 $d_k$ 维点积 $Q\cdot K=\sum_{i=1}^{d_k}q_i k_i$ 的方差为 $d_k\cdot \mathrm{Var}(q_i k_i)$，标准差随 $d_k$ 增长；除以 $\sqrt{d_k}$ 将 pre-softmax logits 的尺度归一化，避免 softmax 因大数值而退化为近似 one-hot 分布、进入梯度接近零的饱和区。因此，原文的“推测”可以被理解为一种**方差稳定化**操作。
 
-现代的解释是点积时方差会被放大，点积 $Q \cdot K = \sum_{i=1}^{d_k} q_i k_i$ ，
+点积时方差会被放大，点积 $Q \cdot K = \sum_{i=1}^{d_k} q_i k_i$ ，
 点积的**方差**为：
 
 $$
@@ -210,7 +216,7 @@ $$
 \sigma = \sqrt{\frac{1}{d} \sum_{i=1}^{d} (v_i - \mu)^2 + \varepsilon}
 $$
 
-其中 $\varepsilon$ 是极小常数（ $10^{-6}$ ），防止除零错误。这里使用分母为 $d$ 的有偏标准差估计，与原始 LayerNorm 论文保持一致；在 LayerNorm 的语境下，有偏与无偏的选择对训练影响很小，且分母为 $d$ 是标准实现。
+其中 $\varepsilon$ 是极小常数（ $10^{-6}$ ），防止除零错误。LayerNorm 由 [Ba, Kiros & Hinton, 2016](https://arxiv.org/abs/1607.06450) 首次提出，其原始形式为 $\text{LN}(x)=\gamma \frac{x-\mu}{\sqrt{\sigma^2+\varepsilon}}+\beta$，归一化统计量在**单个样本的所有特征维度**上计算，而非跨 batch。原文使用分母为 $d$ 的有偏方差估计，并以 $\varepsilon$ 作为数值稳定项；其目的始终是防止方差接近零时除零，且对训练的影响在合理范围内可忽略。在 LayerNorm 的语境下，有偏与无偏的选择对训练影响很小，分母为 $d$ 是原始论文与主流实现的一致做法。
 
 3. **归一化**：
 
@@ -244,7 +250,9 @@ $$
 在这张图中可以看到，残差连接就是将子层（如多头注意力）的输入 $x$ 直接与子层输出 $\text{Sublayer}(x)$ 逐元素相加，而不是经过一个独立的“残差层”。从抽象层理解，它引入了浅层的信息流，防止随层数加深信息损失和误差扩大；残差就是不断引入之前的信息来纠正。
 
 从数学角度上，残差就是不强制网络直接学习理想映射 $H(x)$ ，而是让网络学习"残差" $F(x)=H(x)−x$ 如果某层不需要做变换，网络只需学习 $F(x)≈0$ ，保留输入 $x$ 。
-如果需要变换，网络学习对输入的"修正量"极端情况：即使 $Layer$ 学习效果差，至少能保证 $Output ≈ Input$，不会比不加深层更差
+
+[He et al., 2016, *Deep Residual Learning for Image Recognition*](https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html)（ResNet）系统性地推广并普及了残差连接。该论文的出发点正是“更深网络更难训练”，并提出**不强制网络直接学习理想映射 $H(x)$，而是让网络学习相对于输入的残差 $F(x)=H(x)-x$**。如果某层不需要做变换，网络只需将 $F(x)$ 学成接近零，从而保留输入 $x$；即使子层学习效果不佳，残差路径仍能保证 $Output \approx Input$，不会比不加深层更差。这一“恒等映射优先”的归纳偏置，是深层网络可优化的关键设计。
+
 
 **层归一化和残差连接**
 
@@ -304,13 +312,15 @@ $$
 
 **为什么用ReLU？**
 
-ReLU的**计算高效**，相比Sigmoid/Tanh，ReLU的导数计算简单（0或1）
+ReLU的**计算高效**，相比Sigmoid/Tanh，ReLU的导数计算简单（0或1），ReLU 的**计算高效**正来自其导数在正区间恒为 1、在负区间恒为 0：与 Sigmoid/Tanh 需要计算指数或除法不同，ReLU 的前向与反向都只需比较和乘法，在高频调用的深层网络中显著降低计算开销。Transformer 原始论文 [Vaswani et al., 2017](https://arxiv.org/abs/1706.03762) 在 Section 3.3 中采用的正是 $\mathrm{FFN}(x)=\max(0,xW_1+b_1)W_2+b_2$，即 ReLU 作用于第一层线性变换之后。
 
 **提问：一个合格的激活函数需要什么基础特质?**
 
 **答**：
 
-第一，必须是**非线性**，一个激活函数必须是非线性的，对于一个线性函数，无论多么深的神经网络，它始终等价于一个简单的线性模型，只能拟合简单的函数，多层网络会退化为单层线性模型；而对于非线性函数，能增加网络的复杂性，学习复杂问题。
+第一，必须是**非线性**。一个激活函数必须是非线性的，因为线性函数的复合仍然是线性函数：无论网络多深，如果每一层都只是线性变换，整个网络就等价于一个单一的线性映射，只能拟合线性可分的函数，多层堆叠不会带来任何表示能力的增益。
+
+这一直觉的严格数学表述来自**通用近似定理**：[Cybenko, 1989,](https://doi.org/10.1007/BF02551274) 证明，仅含**单个隐藏层**且使用连续 Sigmoidal 非线性激活的前馈网络，可以在单位超立方体上以任意精度一致逼近任意连续函数；[Hornik, 1991](https://doi.org/10.1016/0893-6080(91)90009-T) 进一步将条件放宽为“任意有界非常数激活函数”。换言之，**非线性激活是神经网络成为通用函数逼近器的必要条件**；没有非线性，深层网络在表达能力上严格退化为线性模型。ReLU 正是这样一种非线性函数，它使 FFN 的两层线性变换之间插入了一个非线性开关，从而让前馈子层能够学习输入的非线性组合，而非仅仅做一次线性投影。
 
 第二是具有**可微性**，在定义域内几乎处处可微，支持梯度下降和反向传播，否则无法使用梯度下降来训练模型。ReLU在x=0 处不可微，但实践中可以使用次梯度（subgradient），效果良好。
 
@@ -363,7 +373,17 @@ $$
 X = X + \text{Sublayer}(\text{LayerNorm}(X))
 $$
 
-它具有明显优势：**避免了 Post-LN 因归一化位于残差流内部而引发的梯度不稳定问题**，使得移除复杂的学习率预热成为可能，并支持**极深网络**（100+ 层）。目前已成为 GPT-3、PaLM 等大模型的默认配置。但 Pre-LN 本身并非没有稳定性挑战；近期研究发现持续的大规模激活等问题，这也推动了后文将讨论的“双重归一化”等变体。
+### **位置上：Pre-LN（现代主流，预归一化）**
+
+**结构**：层归一化 → 子层 → 残差连接
+
+$$
+X = X + \text{Sublayer}(\text{LayerNorm}(X))
+$$
+
+Pre-LN 将 LayerNorm 放置在子层之前，使残差连接保留一条不经过归一化的直接路径，从而改善深层 Transformer 的梯度传播稳定性。关于其优势，[Xiong et al., 2020](https://proceedings.mlr.press/v119/xiong20b.html) 从初始化阶段的梯度尺度出发，指出 Post-LN 靠近输出层的期望梯度较大，容易造成训练不稳定，而 Pre-LN 能够缓解这一问题，减少对学习率预热（Warm-up）的依赖。
+
+需要注意的是，**Pre-LN 更稳定并不意味着 Post-LN 在所有情况下都更差**，两者在不同网络深度下各有优势。然而，Pre-LN 本身也存在局限性。近期研究 [The Curse of Depth in Large Language Models（2025）](https://arxiv.org/abs/2502.05795) 发现，随着网络深度增加，Pre-LN 残差流中的激活方差可能持续增长，导致深层模块的特征学习能力下降。这表明 Pre-LN 虽然改善了梯度传播问题，但并未完全解决深层 Transformer 的训练稳定性问题，也推动了 LayerNorm Scaling 等改进方法的发展。
 
 <div align="center">
   <img src="./images/4-7-post&amp;perNormData.png" alt="post&amp;perNormData" width="800">
@@ -372,24 +392,26 @@ $$
 
 采用预归一化配合其他稳定化技巧后，即使不使用**预热机制**，系统表现也能媲美甚至**优于**需要精细预热方案的**后归一化LayerNorm**。左图展示了**机器翻译**场景下的对比结果，右图则显示在各类任务（特别是使用后归一化训练的BERT）上的趋势。
 
-关于预归一化的优势存在**多种解释**：有研究认为它能避免层间**梯度衰减**，保持**梯度规模恒定**；而未使用预热的后归一化会导致**梯度爆炸**（橙色曲线）。这些论点都很有说服力。但更符合现代认知的解释可能是预归一化本身就是**更稳定的训练架构**。
+关于预归一化的优势存在**多种解释**，[Takase et al., 2022,](https://arxiv.org/abs/2206.00330) 明确提出“**Post-LN 中的 LN 是梯度消失问题的主要来源**，导致训练不稳定，而 Pre-LN 避免了这一问题”；同时，**初始化阶段梯度尺度**层面的解释则由 [Xiong et al., 2020](https://proceedings.mlr.press/v119/xiong20b.html) 提供：Post-LN 靠近输出层的期望梯度过大，是训练不稳定的直接原因。因此，“Pre-LN 更稳定”与“Post-LN 在浅层不必然更差”并不矛盾：Pre-LN 在**深层、无需精细预热的场景**下提供了更可预测的梯度尺度，但这不意味着 Post-LN 在所有深度和所有条件下都劣于 Pre-LN。Takase et al. 的贡献正在于揭示了这一权衡的机制，并在此基础上提出了兼顾稳定性与深层有效训练的 B2T 连接。
 
 <div align="center">
   <img src="./images/4-34-前后归一化的解释.png" alt="前后归一化的解释" width="800">
   <p><em>图 8. 前后归一化的解释</em></p>
 </div>
 
-早期研究曾聚焦于移除学习率预热阶段，因为训练Transformer依赖预热，而若能省去这一步骤，将显著简化训练流程，这构成了许多工作的初始动机。实验很快表明，移除预热会对模型训练的稳定性和收敛性造成严重影响。若采用原始Transformer中的后置归一化配置，即便不进行预热，训练也会出现不收敛的情况（如紫色虚线所示）。相比之下，采用前置归一化等方法，即使没有预热，收敛效果也明显更优。
+早期研究曾聚焦于移除学习率预热阶段，因为训练 Transformer 通常依赖 Warm-up，而若能省去这一步骤，将显著简化训练流程。比如[Nguyen 和 Salazar（2019）](https://aclanthology.org/2019.iwslt-1.17/) 通过实验发现，采用 Pre-LN 并配合较小的参数初始化，可以实现无需 Warm-up 的稳定训练。随后，[Xiong et al.（2020）](https://proceedings.mlr.press/v119/xiong20b.html) 也发现原始 Post-LN Transformer 在不使用预热时容易出现训练不稳定，而 Pre-LN 即使不进行预热，也能取得较好的收敛效果。不过，[Liu et al.（2021）](https://proceedings.neurips.cc/paper_files/paper/2021/file/88ae6372cfdc5df69a976e893f4d554b-Paper.pdf) 通过改进参数初始化，Post-LN 同样可以实现无预热训练，说明归一化位置并非影响训练稳定性的唯一因素。
 
-进一步的研究发现，将层归一化移出残差流，对深层网络的稳定性和信号传播具有根本性影响。核心问题在于“梯度衰减”——前置归一化下，输入从底部沿残差流直达输出，反向传播时梯度可径直穿过网络，路径清晰，从而简化了梯度传播，同时提升了稳定性和信号质量。在合理初始化条件下，前置归一化的梯度范数基本保持恒定；而后置归一化则因每个Transformer块都进行归一化，导致反向传播中梯度范数发生复杂波动。
+进一步的研究从梯度传播和信号传递的角度解释了 Pre-LN 在深层 Transformer 中的稳定性优势。其关键在于，Pre-LN 将 LayerNorm 放置在注意力和前馈网络等子层之前，使残差连接保留了不经过归一化操作的恒等映射路径。因此，在反向传播过程中，梯度不仅可以经过各个子层反向传递，还能够沿残差路径直接传播，从而缓解深层网络中的梯度消失问题。[Takase et al.（2022）](https://arxiv.org/abs/2206.00330) 就Post-LN 中的 LayerNorm 是导致梯度消失的重要因素之一，而 Pre-LN 能够有效缓解这一问题。[Kedia et al.（2024）](https://proceedings.mlr.press/v235/kedia24a.html) 分析了不同归一化结构下梯度随网络深度的变化规律，发现其研究设定下 Pre-LN 的反向梯度方差呈双曲线式增长，而 Post-LN 则呈指数衰减。这表明，Pre-LN 虽然改善了深层网络中的梯度传播条件，但并不意味着梯度范数始终保持恒定；随着网络深度增加，仍需通过合理的参数初始化和残差缩放来维持信号稳定性。
 
-从“保持残差流干净”的设计原则出发，前置归一化显然更为合理。实验数据（如Salazar等人的研究）也证实前置归一化显著改善了梯度尖峰的大小和频率，整体稳定性优于后置归一化。正是这种稳定性和支持深层架构的能力，使得该方案对现代大型语言模型至关重要。因此，“将层归一化移出残差流”已成为业界普遍采纳的标准做法。
+从“保持残差流干净”的设计原则出发，前置归一化显然更为合理。实验数据（如[Nguyen 和 Salazar（2019）](https://aclanthology.org/2019.iwslt-1.17/) 等人的研究）也证实前置归一化显著改善了梯度尖峰的大小和频率，整体稳定性优于后置归一化。正是这种稳定性和支持深层架构的能力，使得该方案对现代大型语言模型至关重要。因此，“将层归一化移出残差流”已成为业界普遍采纳的标准做法。
 
 如今，**预归一化和其他LayerNorm技巧被广泛用作训练大型神经网络时的稳定性辅助手段**。
 
 **结构上，“双归一化”**
 
-为什么一定要把LayerNorm放在前端？不能放在前馈网络之后吗？当然可以。最近的研究进一步尝试在模块前后都添加LayerNorm，Grok 和 Gemma 2 就采用了这种前后都放置 LayerNorm 的方式。与此同时，也有模型选择回到“只在子层之后归一化”的 Post-Norm 路线，例如 OLMo 2 仅在前馈网络和多头注意力之后使用 LayerNorm（并配合 QK-Norm 稳定注意力）。预归一化（Pre-Norm）曾长期占据主导地位，但现状正在改变，出现了多种归一化放置策略并存的局面，并且已有相关评估研究。
+LayerNorm 并非只能放置在子层输入端，近年来的研究开始探索更加多样化的归一化布局。例如，Google DeepMind 在 Gemma 2 中采用了前后双归一化结构，即在注意力和前馈网络子层的输入与输出位置均使用 RMSNorm，以增强训练稳定性。与之不同，Allen AI 发布的 OLMo 2 则采用了子层后归一化策略，将 RMSNorm 放置在注意力和前馈网络的输出端，并结合 QK-Norm 控制注意力计算中的数值尺度。这些实践表明，Pre-Norm 并非唯一可行的设计方案。
+
+[Kim et al.（2025）](https://proceedings.mlr.press/v267/kim25u.html) 进一步系统研究了不同归一化位置对激活方差和梯度传播的影响，并提出 Peri-LN，在最高 3.2B 参数的实验中取得了较好的训练稳定性。此外，[Bertsch et al.（2026）](https://arxiv.org/abs/2608.10296) 通过构建 26 个约 7B 参数的模型，对归一化位置、QK-Norm 等架构因素进行了控制变量评估，发现不同架构选择及其组合会显著影响模型的长上下文扩展能力。因此，现代 Transformer 的归一化设计正在从单一的 Pre-Norm 方案向多种策略并存的方向发展。
 
 **简化变体：RMSNorm(最受欢迎)**
 
@@ -569,9 +591,9 @@ SwiGLU基本上是当今大多数模型采用的结构。比如LLaMA系列、PaL
   <p><em>图 14. NoamShazeer</em></p>
 </div>
 
-NoamShazeer的原始论文中评估了所有GLU变体。这些数据虽然相对较早，但可以看到在CoLA和SST-2任务上的表现。能明显观察到GLU变体持续表现**更优**：GLUE **Score Average** 上，GLU 变体分别达到**84.20、84.12、84.36、84.67**。值得一提的是这是2020年的研究，他们甚至提供了标准差以便评估结果显著性，事实上这些结果确实具有统计显著性。这是很好的实证依据。
+Noam Shazeer（2020）在论文 [GLU Variants Improve Transformer](https://arxiv.org/abs/2002.05202) 中，系统评估了 GLU、GEGLU、SwiGLU 和 ReGLU 等门控线性单元变体在 Transformer 前馈网络中的应用效果。实验结果显示，在参数量和计算量基本匹配的条件下，四种 GLU 变体在 GLUE 基准测试上的平均得分分别达到 84.20、84.12、84.36 和 84.67，均高于传统 ReLU 基线的 83.80。这一结果表明，将门控机制引入前馈网络能够在该实验设置下带来一定的性能提升，也为后续大型语言模型广泛采用 SwiGLU 等门控激活函数提供了早期实证依据。需要注意的是，论文指出实验结果存在一定波动，因此这些数据更适合作为性能改善的实验依据，而不能直接视为统计显著性证明。
 
-Narang 等人后续在 T5 基础上开展的系统性架构消融研究（Narang et al., 2021）也值得关注，这篇研究测试了 40 余种架构变体，GLU 类激活是少数能在 T5-base 上稳定迁移的改进之一。再次可以看到门控线性单元变体始终获得更低的损失值。这种优势模式一直延续至今。关于门控和激活函数，不同模型存在诸多变体，但门控线性单元已基本成为主流选择。
+Narang et al.（2021）在论文 [Do Transformer Modifications Transfer Across Implementations and Applications?](https://arxiv.org/abs/2102.11972) 中，对 40 余种 Transformer 架构变体进行了系统性评估。实验以 T5-base 规模的模型为基础，在统一的训练配置下比较不同架构修改的效果。结果显示，大多数架构改动并不能稳定带来性能提升，而 GLU 类激活函数是其中表现较为突出的改进。在预训练阶段，GLU、GeGLU、ReGLU、SwiGLU 和 LiGLU 的最终 Loss 分别为 1.814、1.792、1.803、1.789 和 1.798，均低于传统 ReLU 基线的 1.838。其中，SwiGLU 和 GeGLU 在预训练、微调及监督训练任务中均表现出性能优势，且没有明显牺牲运行效率。这进一步说明，门控线性单元不仅在单项实验中具有优势，在统一实验框架下也展现出较好的迁移表现。
 
 <div align="center">
   <img src="./images/4-12-Narang_exp.png" alt="Narang_exp" width="800">
@@ -1003,7 +1025,7 @@ $$
 
 某种程度上，大语言模型训练就像是场超参数复刻游戏，导致领域发展趋于保守。但T5模型却展现了非凡魄力，谷歌团队确实做了些相当大胆的尝试。在110亿（11B）参数的T5模型中，他们采用了令人惊叹的配置，隐藏维度仅设置为1024。但它们的 $d_{ff}$（前馈网络维度）及其向上投影的维度是65536，这将使 $d_{ff}$与 $d_{model}$ 的**比例达到64倍**。当然，与此相比，PaLM的比例因子大约是4，而其他模型则小得多。这是一个非常大的差异。最近还有一些其他例子使用了更大的乘数，比如Gemma2紧随其后采用了8倍因子。
 
-我们应该有个思考：是否有人通过更量化的实验证明这是合理的，在JaredKaplan的缩放定律论文中，虽然大多数人关注的是缩放定律部分，但实际上论文还包含非常有用的超参数研究，他们正好研究了提到的$d_{ff}$与$d_{model}$比例，并绘制了随该比例变化时损失值的增长曲线。**图中显示存在一个最佳区间**，比例从1到10左右都有较宽的选择范围，你可以任意选择前馈网络比例而结果都接近最优。
+我们应该有个思考：是否有人通过更量化的实验证明这是合理的，在JaredKaplan的缩放定律论文[Scaling Laws for Neural Language Models](https://arxiv.org/abs/2001.08361)中，虽然大多数人关注的是缩放定律部分，但实际上论文还包含非常有用的超参数研究，他们正好研究了提到的$d_{ff}$与$d_{model}$比例，并绘制了随该比例变化时损失值的增长曲线。**图中显示存在一个最佳区间**，比例从1到10左右都有较宽的选择范围，你可以任意选择前馈网络比例而结果都接近最优。
 
 <div align="center">
   <img src="./images/4-24-FeedFowardRatio.png" alt="FeedFowardRatio" width="800">
@@ -1023,7 +1045,7 @@ $$
   <p><em>图 31. NumHeadRatio</em></p>
 </div>
 
-Bhojanapalli等人2020年的研究，他们提出如果注意力头数量不断增加，其秩会越来越低。如果每个头的维度非常少，就会开始影响注意力操作的表达能力。但在实践中，我们似乎并没有遇到太多显著的低秩瓶颈问题。大多数采用1:1比例的模型都表现得很好。
+Bhojanapalli等人2020年的研究[Low-Rank Bottleneck in Multi-head Attention Models](https://proceedings.mlr.press/v119/bhojanapalli20a.html)，他们提出如果注意力头数量不断增加，其秩会越来越低。如果每个头的维度非常少，就会开始影响注意力操作的表达能力。但在实践中，我们似乎并没有遇到太多显著的低秩瓶颈问题。大多数采用1:1比例的模型都表现得很好。
 
 <div align="center">
   <img src="./images/4-26-Parameters.png" alt="Parameters" width="800">
@@ -1050,7 +1072,10 @@ Bhojanapalli等人2020年的研究，他们提出如果注意力头数量不断�
   <p><em>图 34. wide&amp;deep_exp</em></p>
 </div>
 
-Google的Tay等人有一项非常有趣的研究，探讨了深度与宽度在上游和下游任务中的影响。他们发现：如果仅关注损失值，那么深度并不重要，参数数量才是唯一关键因素。但当下游准确率作为评估指标时，情况就不那么明确了。当时，他们正在研究微调后的SuperGLUE准确率。他们认为在相同计算量（FLOPs）下，更深的模型可能表现更好。这项工作的后续研究并不太多。但从长宽比的角度来看，下游任务的实际表现可能会略有不同。
+Google的Tay等人有一项非常有趣的研究[Scale Efficiently: Insights from Pre-training and Fine-tuning Transformers](https://arxiv.org/abs/2109.10686) ，他们通过训练大量不同深度和宽度配置的 Transformer，比较了模型结构对预训练和下游微调表现的影响。研究发现，如果仅以预训练损失作为评价指标，模型表现主要受到参数规模影响，对网络深度和宽度等结构差异相对不敏感；但在下游 SuperGLUE 任务中，模型结构的影响明显增大，即使参数规模相近，不同深度配置也可能取得不同的微调效果。进一步地，作者比较了增加模型隐藏维度、FFN 宽度、注意力头数和网络层数等不同扩展方式，发现增加深度通常比单纯增加 FFN 宽度更有利于改善下游任务的计算效率。基于这一观察，作者提出了 DeepNarrow 策略，即优先增加 Transformer 的层数，而不是一味扩大模型宽度。
+
+该研究表明，模型的深度与宽度比例并不存在一个可以脱离任务和计算预算而独立确定的最优值：预训练损失接近的模型，在下游迁移能力上仍可能存在差异。因此，在讨论 Transformer 的结构设计时，除了考虑参数规模和预训练损失，还应将下游任务表现及计算效率纳入评价。
+
 
 **系统并行策略对宽深比的隐形约束**
 
@@ -1064,11 +1089,23 @@ Google的Tay等人有一项非常有趣的研究，探讨了深度与宽度在�
 
 总体而言，词汇表规模呈现不断**扩大**的趋势。我们认为这很大程度上是因为大语言模型正在实际部署中投入使用，逐渐成为更有用的服务。当这种情况发生时，模型需要与使用不同语言的人群交互，处理表情符号等各种近乎模态化或超出预期的语言形式。早期模型（尤其是单语模型）的词汇量通常在**3万到5万**token之间，比如早期的GPT和LLaMA系列。
 
-但观察多语言模型或称之为生产系统的模型时，会发现它们的词汇量都已扩展到**10万到25万**的范围。以注重多语言处理的Cohere公司推出的Command模型为例，其词汇量就非常庞大。即便是GPT-4及其后续采用GPT-4分词器的模型，词汇量也达到10万标记左右。因此**10万到20万的词汇量已成为行业主流标准**。有研究表明，随着模型规模扩大，模型在一定程度上能够处理更多词汇元素并有效利用它们。因此随着模型规模扩展或训练数据增加，词汇量呈现持续增长的趋势。
+早期模型（尤其是单语模型）的词汇量通常集中在**3万到5万**token的区间，但这一选择并非经过系统的优化验证，而更多是历史惯性的结果。GPT-2 的词表为 50,257 token，GPT-3 沿用同一量级；Llama 2 的词表则固定为 32,000 token。这一区间在文献中被称为“魔法数字”：[Takase et al., 2025](https://aclanthology.org/2025.findings-acl.57/)（ACL 2025 Findings）指出，“从 BERT 到 GPT 再到 Llama，30k–60k 的词表规模已成为‘魔法数字’，几乎没有论文为其选择给出依据”。换言之，早期单语模型的词表规模是在覆盖率、嵌入层参数量与训练效率之间取得的一个未经严格优化的**经验平衡**。
+
+以注重多语言处理的Cohere公司推出的Command模型为例，其词汇量就非常庞大。即便是GPT-4及其后续采用GPT-4分词器的模型，词汇量也达到10万标记左右。
+
+因此，**10万到20万（乃至更高）的词汇量已成为现代大语言模型的主流区间**，而这一趋势有两条互补的相关研究支撑。[Tao et al., 2024, ](https://arxiv.org/abs/2407.13623)（NeurIPS 2024）在 33M 到 3B 参数的模型上研究了词表大小与缩放定律的交互，结论是“**最优词表大小取决于可用计算预算，更大的模型需要更大的词表**”，且“大多数 LLM 使用的词表规模过小”。该工作预测 Llama2-70B 的最优词表**至少应为 216K**，是其实际 32K 的约 7 倍；仅将词表从 32K 提升到 43K，在相同 FLOPs（2.3e21）下就将 ARC-Challenge 准确率从 29.1 提升至 32.0。
+
+而[Takase et al., 2025](https://aclanthology.org/2025.findings-acl.57/) 在受控设置下系统比较了不同子词词表规模对 LLM 性能的影响，实验结果表明“**更大的词表规模能持续带来更好的 LLM 性能**”，并且在一个持续训练场景中，切换到更合适的更大词表也优于沿用预训练阶段的词表。这两条证据共同表明：词表规模的扩大并非单纯的工程偏好，而是模型规模、计算预算与下游质量三者共同推动的系统性趋势，更大的模型有能力利用更细粒度的子词表示，而更大的词表又反过来使同等计算预算下的训练与推理更高效。
 
 **提问：多语言词表是否有助于提升单一语言性能？**
 
-多语言词表我们认为对高资源语言（比如英语和中文）来说**影响较小**。如果只考虑英语语言建模，使用较小词表也能胜任。但大词表真正发挥优势的领域是在**处理少数语种**时——不是指数据分布的尾部，而是指更小众的语言。有个典型例子是Cohere发布的模型或分词器，他们总是强调其大词表设计和分词器训练方式能让**非英语低资源语言用更少token**表示，从而大幅降低推理成本。
+**提问：多语言词表是否有助于提升单一语言性能？**
+
+这一问题的答案取决于“单一语言”是高资源还是低资源语言。**对于高资源语言（如英语、中文），多语言大词表的主要收益并不体现在语言建模质量本身**。但需要更精确地表述：文献中反复观察到的不是“影响较小”的中性结果，而是一个方向明确的负面效应——[Chang et al., 2024, *When Is Multilinguality a Curse? Language Modeling for 250 High- and Low-Resource Languages*](https://aclanthology.org/2024.emnlp-main.236/)（EMNLP 2024，Outstanding Paper）在超过 250 种语言上预训练了上万个月单语与多语言模型，结论是“**高资源语言在多语言预训练场景下一致地表现更差**”，并且在数据规模增大后，加入多语言数据会同时损害低资源和高资源语言的性能，这一现象被称为“多语言诅咒”（curse of multilinguality）。因此，如果训练目标仅限于英语或中文，小词表已足够胜任；多语言大词表给高资源语言带来的增量质量收益很小，在容量受限或数据配比不当时甚至可能是负面的。
+
+真正从大词表中获得系统性收益的，是**低资源语言和形态复杂、非拉丁文字的语言**。以英语为中心的标准分词器在这些语言上会产生严重的过度切分：[Petrov et al., 2023, *Language Model Tokenizers Introduce Unfairness Between Languages*](https://dl.acm.org/doi/abs/10.5555/3666122.3667730)（NeurIPS 2023）明确指出，“同一段文本翻译成不同语言后，tokenization 长度可以相差**高达 15 倍**”，并且这种差异**即使在刻意训练的多语言分词器上依然持续存在**。这种“分词税”直接转化为更高的 API 成本、更长的处理时延，以及更短的有效上下文窗口，对低资源语言构成一项结构性的额外负担。
+
+Cohere 是这一逻辑在工程实践中的典型代表。根据公开的模型说明，Cohere 的多语言分词器被公司自身测量为在非英语文本上产生比 OpenAI 分词器更少的 token：以日语为例，差距约为 **1.67 倍**（即 Cohere 分词器所需 token 数更少），对其他非英语语言差距略小但方向一致；更少的 token 直接降低了非英语用户的推理成本并等效延长了可用上下文。Cohere Labs 新近发布的 [Tiny Aya](https://proceedings.colm.cc/paper_files/paper/2026/file/dd3c889922df2112a5b1769e3c19e28e-Paper-Conference.pdf) 系列（3.35B 参数，覆盖 70 种语言）进一步将**script-aware tokenizer** 作为核心设计：其分词器在大多数书写系统上实现有竞争力或更优的压缩率，并**特别针对代表性不足的文字系统**进行优化，明确服务于低资源语言的推理效率。这些工程选择印证了一个关键判断：**多语言大词表的优先服务对象不是英语或中文这类高资源语言的质量提升，而是低资源语言在表示效率与推理经济性上的“追赶”**。换言之，如果你只关心英语或中文的语言建模，小词表在质量上足以胜任；大词表的价值在于让那些在英语中心分词器下“每一个词都被切碎”的语言，第一次获得与高资源语言可比的 token 效率。
 
 ### 4.5 dropout和其他的正则化方法
 
@@ -1102,7 +1139,9 @@ Google的Tay等人有一项非常有趣的研究，探讨了深度与宽度在�
 
 一个深刻的反直觉事实是：在当今的大规模语言模型预训练中，**权重衰减（Weight Decay）几乎不再扮演“防止过拟合”的正则化角色**。由于数据规模远大于模型单轮遍历的能力，过拟合根本不会发生，训练损失与验证损失高度一致。
 
-然而，大量实验（如 Andriushchenko 等人的研究）表明，**合理的权重衰减能够显著降低最终的训练损失**。其作用机理与优化过程紧密耦合：在训练末期，当余弦学习率衰减到极小值时，权重衰减会与优化动态发生复杂的相互作用，产生某种“隐性加速”效果，帮助模型收敛到更优的局部极小值。因此，权重衰减实质上是一种**优化干预手段**，而非传统意义上的正则化工具。这也解释了为何即使在零过拟合风险下，几乎所有现代大模型训练仍然保留权重衰减。
+传统上，权重衰减（Weight Decay）通常被视为一种用于限制模型参数规模、缓解过拟合的正则化手段。然而，D’Angelo、Andriushchenko 等人（2024）在论文 [Why Do We Need Weight Decay in Modern Deep Learning?](https://arxiv.org/abs/2310.04415) 中指出，在现代大语言模型的训练场景下，权重衰减的作用可能更多体现在优化过程本身，而非传统意义上的过拟合控制。作者通过 GPT-2 模型的实验发现，即使训练数据与模型之间几乎不存在明显的泛化差距，适当的权重衰减仍然能够降低最终训练损失。其关键机制在于，权重衰减通过控制模型参数范数，间接改变优化过程中的有效学习率（Effective Learning Rate），进而影响随机优化中的偏差—方差权衡。在训练前期，较高的有效学习率虽然能够加快优化偏差的消除，但也可能放大梯度噪声带来的方差；随着训练推进和学习率逐渐衰减，方差的影响减弱，前期积累的优化优势便可能转化为更低的最终训练损失。
+
+因此，权重衰减在现代大模型训练中不应仅被理解为防止过拟合的正则化工具，它同时也是一种能够改变优化动态、影响最终训练效果的重要超参数。
 
 ## 5 模型的稳定性
 
@@ -1228,4 +1267,29 @@ Transformer 的许多方面（架构、超参数）在大型语言模型中是�
 
 ## 参考资料
 
-- [《Attention Is All You Need》](https://arxiv.org/abs/1706.03762)
+- [Attention Is All You Need — Vaswani et al., 2017](https://arxiv.org/abs/1706.03762)
+- [Are Sixteen Heads Really Better than One? — Voita et al., 2019](https://aclanthology.org/P19-1580/)
+- [What Does BERT Look At? An Analysis of BERT's Attention — Clark et al., 2019](https://aclanthology.org/W19-4808/)
+- [Layer Normalization — Ba, Kiros & Hinton, 2016](https://arxiv.org/abs/1607.06450)
+- [Deep Residual Learning for Image Recognition — He et al., 2016](https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html)
+- [Approximation by Superpositions of a Sigmoidal Function — Cybenko, 1989](https://doi.org/10.1007/BF02551274)
+- [Approximation Capabilities of Multilayer Feedforward Networks — Hornik, 1991](https://doi.org/10.1016/0893-6080(91)90009-T)
+- [On Layer Normalization in the Transformer Architecture — Xiong et al., 2020](https://proceedings.mlr.press/v119/xiong20b.html)
+- [The Curse of Depth in Large Language Models — 2025](https://arxiv.org/abs/2502.05795)
+- [On the Effect of Pretraining Corpora on In-context Learning by a Large-scale Language Model — Takase et al., 2022](https://arxiv.org/abs/2206.00330)
+- [Pre-LN Transformer: Better than Post-LN with a Warm-up — Nguyen & Salazar, 2019](https://aclanthology.org/2019.iwslt-1.17/)
+- [Understanding the Difficulty of Training Transformers — Liu et al., 2021](https://proceedings.neurips.cc/paper_files/paper/2021/file/88ae6372cfdc5df69a976e893f4d554b-Paper.pdf)
+- [Towards Understanding and Improving Pre-LayerNorm Transformers — Kedia et al., 2024](https://proceedings.mlr.press/v235/kedia24a.html)
+- [Peri-LN: Position-Aware Layer Normalization Improves Stability of Deep Transformers — Kim et al., 2025](https://proceedings.mlr.press/v267/kim25u.html)
+- [Normalization Matters: Impact of Normalization on Long-Context Extrapolation — Bertsch et al., 2026](https://arxiv.org/abs/2608.10296)
+- [GLU Variants Improve Transformer — Shazeer, 2020](https://arxiv.org/abs/2002.05202)
+- [Do Transformer Modifications Transfer Across Implementations and Applications? — Narang et al., 2021](https://arxiv.org/abs/2102.11972)
+- [Scaling Laws for Neural Language Models — Kaplan et al., 2020](https://arxiv.org/abs/2001.08361)
+- [Low-Rank Bottleneck in Multi-head Attention Models — Bhojanapalli et al., 2020](https://proceedings.mlr.press/v119/bhojanapalli20a.html)
+- [Scale Efficiently: Insights from Pre-training and Fine-tuning Transformers — Tay et al., 2021](https://arxiv.org/abs/2109.10686)
+- [How Much Do Language Models Memorize? Revisiting Vocabulary Size — Takase et al., 2025](https://aclanthology.org/2025.findings-acl.57/)
+- [Scaling Laws with Vocabulary: Larger Models Deserve Larger Vocabularies — Tao et al., 2024](https://arxiv.org/abs/2407.13623)
+- [When Is Multilinguality a Curse? Language Modeling for 250 High- and Low-Resource Languages — Chang et al., 2024](https://aclanthology.org/2024.emnlp-main.236/)
+- [Language Model Tokenizers Introduce Unfairness Between Languages — Petrov et al., 2023](https://dl.acm.org/doi/abs/10.5555/3666122.3667730)
+- [Tiny Aya: Bridging Scale and Multilingual Performance — Cohere Labs](https://proceedings.colm.cc/paper_files/paper/2026/file/dd3c889922df2112a5b1769e3c19e28e-Paper-Conference.pdf)
+- [Why Do We Need Weight Decay in Modern Deep Learning? — D'Angelo et al., 2024](https://arxiv.org/abs/2310.04415)
