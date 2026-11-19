@@ -1,608 +1,1223 @@
-# Chapter 4: Language Model Architecture and Training Details
+# Chapter 4: Technical Details of Language Model Architecture and Training
 
-## Learning Objectives
+The origin of the Transformer model can be traced back to 2017, when the Google research team first proposed it in the paper [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762). The model's core innovation was the introduction of the **self-attention mechanism**, which discarded the traditional recurrent neural network (RNN) and convolutional neural network (CNN) structures. Self-attention allows the model to compute in parallel when processing sequence data, greatly improving computational efficiency and solving the problem of long-range dependencies.
 
-Before diving into specific analysis, let's clarify this section's focus. This section covers LLM architecture and training techniques:
+## 1 Learning Objectives
 
-1. [Review the standard Transformer architecture from the original paper, understanding each component's specific details](#41-quick-review-of-standard-transformer)
-2. [Analyze and learn modern Transformer component variants, including attention, normalization, position encoding, etc., and their advantages](#42-modern-transformer-variants)
-3. [Beyond components, hyperparameter selection is also critically important](#43-hyperparameter-considerations)
+Before diving into the detailed analysis, let us clarify the focus of this section. This section centers on the language architecture and training techniques of large models, and mainly covers:
 
-After completing this chapter, you will be able to: systematically understand Transformer's core components (position encoding, multi-head attention, layer normalization, residual connections, feed-forward network), master modern language model architecture variants (activation functions, attention variants, position encoding, normalization methods), and understand and apply hyperparameter design principles and stability techniques to analyze and optimize large-scale language model training.
+- Understanding and quickly reviewing the architecture of the Transformer from the original paper, including the specific details of each component.
+- Analyzing and learning the modern variants of each Transformer component—attention, normalization, positional encoding, and so on—as well as their advantages.
+- Beyond the components themselves, the choice of hyperparameters for each component is also very important.
 
-## 4.1 Quick Review of Standard Transformer
+After completing this chapter, you will be able to: systematically understand the core components of the Transformer (positional encoding, multi-head attention, layer normalization, residual connections, feed-forward networks); master the architectural variants used by modern language models (activation functions, attention variants, positional encoding, normalization methods); and understand and apply hyperparameter design principles and stability techniques to analyze and optimize the training of large-scale language models.
 
-The Transformer model traces its origin to 2017, when the Google research team first proposed it in [《Attention Is All You Need》](https://arxiv.org/abs/1706.03762). The model's core innovation is introducing the **Self-Attention Mechanism**, abandoning traditional RNN and CNN structures. Self-attention enables the model to compute in parallel when processing sequence data, dramatically improving computational efficiency while solving long-distance dependency problems.
+## 2 A Quick Review of the Standard Transformer Architecture (skip to Section 3 if you are already familiar with it)
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-1-transformer.png" width="800" alt="4-1-transformer">
+<div align="center">
+  <img src="./images/4-1-transformer.png" alt="transformer" width="800">
+  <p><em>Figure 1. transformer</em></p>
+</div>
 
-The figure shows the Transformer Block structure, with the right side displaying the **decoder block** and **encoder block**. Stacking N of these decoder and encoder blocks forms the Transformer.
+The figure above shows the Transformer Block structure. On the left is the **encoder block** and on the right is the **decoder block**. Stacking N encoder and decoder blocks forms the Transformer.
 
-### 4.1.1 Positional Encoding — Sinusoidal Encoding
+### 2.1 Positional Encoding: Sinusoidal Positional Encoding
 
 $$
-PE_{(pos,2i)} = \sin\left(\frac{pos}{10000^{2i/d_{\text{model}}}}\right), \quad
-PE_{(pos,2i+1)} = \cos\left(\frac{pos}{10000^{2i/d_{\text{model}}}}\right)
+\begin{align*}
+PE_{(pos,2i)} &= \sin\left(\frac{pos}{10000^{2i/d_{\text{model}}}}\right) \\
+PE_{(pos,2i+1)} &= \cos\left(\frac{pos}{10000^{2i/d_{\text{model}}}}\right)
+\end{align*}
 $$
 
-Variables: $pos$ — token position in sequence (0, 1, 2, ..., N-1); $i$ — dimension index; $d_{model}$ — model embedding dimension (512 in the paper); $10000$ — base frequency (configurable). The encoding is directly added to word embeddings: $X = Token + PE(pos)$.
+**Variables:**
 
-Sinusoidal position encoding is the key design for introducing **positional information** into the Transformer. Since the Transformer's core is self-attention, which **inherently lacks perception of input order** — if word vectors were directly input, "我爱你" and "你爱我" would be treated as the same set. To solve this, positional information must be explicitly added to the input. Sinusoidal encoding requires no training; it generates position representations through fixed formulas, with the core idea of using sine and cosine functions at different frequencies to produce a unique encoding vector for each position that is also capable of perceiving relative position relationships.
+$pos$: the position of the token in the sequence (0, 1, 2, ..., N-1)
+$i$: the dimension index
+$d_{model}$: the model embedding dimension (512 in the paper)
+$10000$: the base frequency (configurable)
 
-Specifically, for the $pos$-th position and the $i$-th dimension of the encoding vector: even dimensions use sine, odd dimensions use cosine. The term $10000^{2i/d_{model}}$ determines the wavelength at different dimensions, forming a multi-scale encoding system: low dimensions (small $i$) correspond to high frequencies, enabling fine-grained distinction of adjacent positions; high dimensions (large $i$) correspond to low frequencies, capable of covering longer-distance relative relationships. Ultimately, each position receives an encoding vector of the same dimension as the word vector; the two are added as model input.
+After computing the positional encoding with the formula, it is added directly to the word embedding: $X = Token + PE(pos)$.
 
-This design brings several significant advantages. First, it is completely deterministic and **requires no extra parameters**, avoiding increased model complexity or overfitting of trainable position embeddings. Second, through trigonometric function periodicity, encoding values are constrained to $[-1,1]$, numerically stable and easy to add to word vectors. More importantly, it **naturally supports relative position modeling**: for any fixed offset $k$, the encoding vector at $pos+k$ can be expressed as a linear transformation of the encoding vector at $pos$ (dependent only on $k$), enabling the self-attention mechanism to more easily learn relative position relationships between sequence elements, not just absolute positions. This property is particularly crucial for handling variable-length sequences and capturing local dependencies.
+Sinusoidal positional encoding is the key design through which the Transformer introduces **positional information** into a sequence. Because the core of the Transformer is the self-attention mechanism, it **has no inherent ability to perceive input order**. If word vectors were fed directly into the model, "I love you" and "you love me" would be treated as the same set. To solve this problem, positional information must be explicitly added to the input. Sinusoidal positional encoding is a position representation that requires no training and is generated by a fixed formula. Its core idea is to use sine and cosine functions of different frequencies to generate, for each position in the sequence, a unique encoding vector that is also capable of perceiving relative position relationships.
 
-> **Q: Why is positional encoding needed?**
-> **A:** Since the Transformer has no recurrent or convolutional structure, the model itself is **permutation-invariant**. Positional encoding, added to token embeddings, provides the model with necessary sequential information.
->
-> **Q: How does sinusoidal encoding provide positional information?**
-> **A:** For different positions `pos`, each dimension of the encoding vector takes different values, forming a **unique pattern**; the model learns this pattern to distinguish near and far positions.
+Specifically, for the $pos$-th position in the sequence (counting from 0) and the $d$-th dimension of the encoding vector (with total dimension $d_{\text{model}}$), we define the dimension-pair index $i = 0, 1, \dots, \frac{d_{\text{model}}}{2} - 1$. The encoding values are generated as follows:
 
-### 4.1.2 Multi-Head Attention
+When dimension $d$ is even (i.e., $d = 2i$), the sine function is used; when dimension $d$ is odd (i.e., $d = 2i+1$), the cosine function is used. Note that the even and odd dimensions in the same pair **share the same base frequency**.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-2-MultiHeadAttention.png" width="800" alt="4-2-MultiHeadAttention">
+The formulas are:
 
-The attention mechanism mimics human attention — when viewing an image, we don't distribute attention evenly across every corner but selectively observe prominent parts. Similarly, the attention mechanism focuses on important parts of the input, expressed as larger weights. Attention is essentially weighted summation.
+$$
+PE_{(pos, 2i)} = \sin\left(\frac{pos}{10000^{2i / d_{\text{model}}}}\right)
+$$
 
-Multi-head attention is the Transformer's core innovation. By executing multiple attention "heads" in parallel, it enables the model to simultaneously attend to multiple dependency relationships from different perspectives and semantic levels, greatly enhancing complex pattern modeling capability.
+$$
+PE_{(pos, 2i+1)} = \cos\left(\frac{pos}{10000^{2i / d_{\text{model}}}}\right)
+$$
 
-#### 1. Single-Head Attention and Its Limitations
+Here $10000^{2i / d_{\text{model}}}$ determines the wavelength at different dimensions, forming a multi-scale encoding system: low dimensions (small $i$) correspond to high frequencies and can finely distinguish adjacent positions; high dimensions (large $i$) correspond to low frequencies and can cover relative relationships over longer distances. Ultimately, each position receives an encoding vector of the same dimension as the word vector, and the two are added to form the model input.
 
-Single-head attention computation is based on scaled dot-product attention. For input sequence $X$ (shape $[B, S, d_{model}]$), three weight matrices map it to query (Q), key (K), and value (V):
+This design brings several notable advantages. First, it is completely deterministic and **requires no additional parameters**, avoiding increased model complexity or overfitting of position embeddings during training. Second, through the periodicity of trigonometric functions, the encoding values are constrained to $[-1, 1]$, which is numerically stable and easy to add to word vectors. More importantly, it **naturally supports relative position modeling**: for any fixed offset $k$, there exists a block-diagonal matrix $M_k$ that depends only on $k$ and not on $pos$, such that $PE(pos+k)=M_k\cdot PE(pos)$. See [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762). Geometrically, each $(\sin,\cos)$ dimension pair undergoes a rotation in a two-dimensional plane, with the rotation angle determined jointly by $k$ and the frequency of that dimension pair; multiple dimension pairs correspond to block rotations at multiple frequencies, so the linear transformation can be written as a block-diagonal matrix $M_k$. This makes it easier for the self-attention mechanism to learn the relative position relationships between elements in a sequence, rather than only absolute positions. This property is particularly important for handling variable-length sequences and capturing local dependencies.
 
-$$Q = XW^Q, \quad K = XW^K, \quad V = XW^V$$
+Sinusoidal positional encoding was first proposed in *Attention Is All You Need* as the standard positional encoding scheme of the original Transformer. Although learnable position embeddings, relative positional encoding, and other variants have appeared since then, sinusoidal encoding, because it is simple, efficient, and requires no training, is still widely used in many sequence modeling settings or serves as a classic example for understanding positional encoding mechanisms.
 
-$$\text{Attention}(Q,K,V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$$
+**Question: Why do we need positional encoding?**
 
-Here $d_k = d_{model}$, and the scaling factor $\sqrt{d_k}$ prevents dot products from growing too large, pushing softmax into gradient saturation regions. Single-head attention's limitation is that it computes only one "query-key-value" relationship — like observing with only one pair of eyes — making it difficult to simultaneously capture syntactic structure, semantic associations, long-range dependencies, and other patterns.
+**Answer:** Because the Transformer has no recurrent or convolutional structure, the model itself is **permutation-invariant**. Positional encoding, added to the token embeddings, provides the model with the necessary order information.
 
-#### 2. Multi-Head Attention Design
+**Question: How does sinusoidal positional encoding provide positional information?**
 
-Multi-head attention splits $d_{model}$-dimensional queries, keys, and values into $h$ independent heads, each computing attention in a lower-dimensional space ($d_k = d_{model}/h$), enabling the model to jointly extract information from multiple representation subspaces. Each head has its own projection matrices, allowing focus on different feature types — some heads may focus on local syntactic structure while others capture long-distance semantic dependencies.
+**Answer:** For different positions `pos`, each dimension of the positional encoding vector takes a different value, forming a **unique pattern**; the model learns this pattern to distinguish near and far positions.
 
-#### 3. Multi-Head Computation Process
+### 2.2 Multi-Head Attention
 
-**Step 1: Multi-head splitting.** Reshape and transpose Q, K, V from $[B, S, d_{model}]$ to $[B, h, S, d_k]$.
+<div align="center">
+  <img src="./images/4-2-MultiHeadAttention.png" alt="MultiHeadAttention" width="800">
+  <p><em>Figure 2. MultiHeadAttention</em></p>
+</div>
 
-**Step 2: Parallel head computation.** For each head independently: $\text{Head}_i = \text{softmax}(Q_i K_i^T / \sqrt{d_k}) V_i$
+The attention mechanism imitates how human attention works. When people look at a picture, they do not distribute attention evenly over every corner of the image; instead, they selectively observe the bright and salient parts. The attention mechanism works the same way: it focuses on the important parts of the input, which show up as large weights. Attention is essentially a weighted sum.
 
-**Step 3: Concatenation and final projection.** $\text{Output} = \text{Concat}(\text{Head}_1, ..., \text{Head}_h) W^O$, restoring to $[B, S, d_{model}]$.
+Multi-head attention is the core innovation of the Transformer model. By running multiple attention "heads" in parallel, it allows the model to simultaneously attend to multiple dependencies in the sequence from different angles and different semantic levels, greatly enhancing its ability to model complex patterns. Below we start from the practice and limitations of single-head attention and gradually develop the complete design of multi-head attention.
 
-Original paper parameters: $d_{model}=512$, $h=8$, $d_k=d_v=64$, scaling factor $\sqrt{d_k}=8$.
+**Single-head attention: practice and limitations**
 
-> **Q: Why multiple heads instead of single?**
-> **A:** Parallel attention to different patterns; each head in a low-dimensional subspace ($d_k=64$) is more efficient than single head in high-dimensional space. Multi-head concatenation approximates high-rank matrix decomposition with stronger expressive power. Computation is also more efficient — heads compute in parallel, suitable for GPU acceleration, with total computation comparable to single head.
+Single-head attention is based on the scaled dot-product attention mechanism. For an input sequence $X$ (of shape $[batchSize, seqLen, d_{model}]$), we first map it into queries (Q), keys (K), and values (V) through three weight matrices:
 
-> **Q: Why divide by $\sqrt{d_k}$?**
-> **A:** Original hypothesis: when $d_k$ is large, dot product magnitudes grow large, pushing softmax into extremely low-gradient regions. Modern understanding: $\text{Var}(Q\cdot K) = d_k \cdot \text{Var}(q_i k_i)$, so dividing by $\sqrt{d_k}$ keeps variance stable. Benefits: maintains variance stability regardless of $d_k$, avoids gradient vanishing, stabilizes training.
+$$
+Q = X W^Q, \quad K = X W^K, \quad V = X W^V
+$$
 
-### 4.1.3 LayerNorm and Residual Connections
+Here $W^Q, W^K, W^V$ all have shape $[d_{model}, d_{model}]$, so $Q, K, V$ keep the shape $[batchSize, seqLen, d_{model}]$. The attention output is then computed as:
 
-#### 1. What is Normalization?
+$$
+\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right)V
+$$
 
-Normalization scales data by specific rules into a uniform standard range or distribution. In probability theory: $x_{norm} = (x - \mu) / \sigma$. The process resets the data distribution to a standard state.
+Here $d_k = d_{model}$, and the scaling factor $\sqrt{d_k}$ prevents the dot products from becoming too large and pushing gradients into the saturation region.
 
-Original Transformer LayerNorm:
-$$\text{LayerNorm}(v) = \gamma \frac{v - \mu}{\sigma} + \beta$$
+The limitation of single-head attention is that it can compute only one kind of "query-key-value" relationship, as if observing with only one eye. This makes it difficult for the model to capture multiple patterns—syntactic structure, semantic associations, long-range dependencies—at the same time, and the attention distribution is often too diffuse to focus on multiple important subspaces. The common practice is therefore to repeat the attention mechanism many times, let each head learn a different subspace representation, and finally merge the results.
 
-Step by step: compute mean $\mu$ across features → compute std $\sigma$ → normalize → apply learnable $\gamma$ (scale) and $\beta$ (shift).
+**The design idea of multi-head attention**
 
-#### 2. What is a Residual Connection?
+Multi-head attention splits the $d_{model}$-dimensional queries, keys, and values into $h$ independent heads, and each head performs attention computation in a lower-dimensional space ($d_k = d_{model} / h$) in parallel, so that the model can jointly extract information from multiple representation subspaces.
 
-The residual connection (skip connection) is a "shortcut" between network layers, allowing information to bypass certain layers directly:
+Each head has its own projection matrices and can attend to different types of features. This phenomenon of "head specialization" has systematic empirical support. [Voita et al., 2019](https://aclanthology.org/P19-1580/) analyzed the multi-head self-attention of a Transformer encoder head by head and found that the most important and most confident heads often play **consistent, linguistically interpretable roles**.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-3-Add&Norm.png" width="400" alt="4-3-Add&Norm">
+[Clark et al., 2019](https://aclanthology.org/W19-4808/) analyzed BERT's attention and also found that different heads attend to patterns such as separators, specific positional offsets, and whole-sentence spans, and that **some heads correspond closely to syntactic relations (such as a verb's direct object or a preposition's object) and to coreference relations**, with some heads achieving quite high accuracy on these tasks. Of course, which head is responsible for which pattern still depends on the training data and model configuration, and **not every head necessarily has a clear linguistic function**; but the design intuition that multiple heads may develop a division of labor through parallel subspaces is supported by the empirical literature.
 
-$$\text{Output} = \text{Input} + \text{Layer}(\text{Input})$$
+**The detailed computation of multi-head attention**
 
-From an abstract perspective, this introduces shallow information flow — preventing information loss and error amplification as depth increases. Mathematically: the network learns the "residual" $F(x) = H(x) - x$ rather than directly learning the ideal mapping $H(x)$. If a layer doesn't need transformation, the network just learns $F(x) \approx 0$, preserving the input $x$.
+**Step 1: Split into heads (assuming Q, K, V have already been linearly projected)**
 
-#### 3. LayerNorm + Residual Connection Collaboration
+For the input $Q, K, V$ (all of shape $[batchSize, seqLen, d_{model}]$), we first split them into $h$ heads. Through reshape and transpose operations, the head dimension is moved forward:
 
-In the original Transformer, Post-Norm is used: $\text{output} = \text{LayerNorm}(x + \text{Sublayer}(x))$. This is: **sublayer → residual → normalization**.
+```python
+Q = Q.reshape(batch_size, seq_len, h, d_k)   # [bs, seq_len, h, d_k]
+Q = Q.transpose(1, 2)                        # [bs, h, seq_len, d_k]
+```
 
-**Residual connections ensure gradients flow directly back**, at minimum preserving identity mapping capability. **LayerNorm standardizes the summed distribution**, preventing numerical explosion/vanishing. **Together they make 12-layer or even deeper networks trainable.**
+After the transpose, the shapes of $Q, K, V$ become $[batchSize, h, seqLen, d_k]$. In this way, each head can be processed independently and efficiently in a batch.
 
-> **Q: Role of LayerNorm?**
-> **A:** Solves distribution shift and gradient instability problems; standardizes distribution; accelerates convergence; prevents vanishing/exploding gradients.
->
-> **Q: Role of residual connections?**
-> **A:** Ensures direct gradient back-propagation; at minimum preserves identity mapping; provides stable information pathway; solves distribution instability in deep networks.
+**Step 2: Compute the attention of each head in parallel**
 
-### 4.1.4 Feed-Forward Network and Activation Functions
+For the $i$-th head, scaled dot-product attention is performed independently:
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-4-FeedForward.png" width="400" alt="4-4-FeedForward">
+$$
+\text{Head}_i = \text{Attention}(Q_i, K_i, V_i) = \text{softmax}\left(\frac{Q_i K_i^T}{\sqrt{d_k}}\right)V_i
+$$
 
-The original Transformer uses **ReLU** activation in the position-wise FFN:
+Here $Q_i, K_i, V_i$ all have shape $[batchSize, seqLen, d_k]$, so $Q_i K_i^T$ has shape $[batchSize, seqLen, seqLen]$, representing the attention scores between every pair of positions within that head. The output $\text{Head}_i$ of this head also has shape $[batchSize, seqLen, d_k]$.
 
-$$\text{FFN}(x) = \max(0, xW_1 + b_1)W_2 + b_2$$
+**Step 3: Concatenation and final linear transformation**
 
-Configuration: input/output dim = $d_{model}=512$, inner dim = $d_{ff}=2048$ (4× expansion). ReLU is applied only in the first layer. Why ReLU? Computationally efficient — derivative is simply 0 or 1, much simpler than Sigmoid/Tanh.
+The outputs of all heads are concatenated along the head dimension to restore the original dimension:
 
-> **Q: What basic qualities must a good activation function have?**
-> **A:** 1. **Nonlinear** — otherwise deep networks collapse to single-layer linear models. 2. **Differentiable** — must support gradient descent and backpropagation (ReLU uses subgradient at x=0). 3. **Computationally simple** — called billions of times during training and inference.
+$$
+\text{MultiHead}(Q,K,V) = \text{Concat}(\text{Head}_1, ..., \text{Head}_h)
+$$
 
----
+The concatenated shape is $[batchSize, seqLen, h \times d_k] = [batchSize, seqLen, d_{model}]$. Finally, an output projection matrix $W^O$ (of shape $[d_{model}, d_{model}]$) performs a linear transformation to obtain the final multi-head attention output:
 
-## 4.2 Modern Transformer Variants
+$$
+\text{Output} = \text{MultiHead}(Q,K,V) W^O
+$$
 
-Since 2017, numerous high-quality papers have emerged — CommandA, OLMo, SmolLM, Gemma3, Qwen2.5, InternLM — with about 19 dense models released last year, most involving subtle architectural adjustments. Just learning the original standard architecture is insufficient to face the market's accelerating innovation.
+This output keeps the same dimension as the input, which facilitates subsequent operations such as residual connections.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-5-models.png" width="800" alt="4-5-models">
+**Specific parameters in the original paper**
 
-Looking at the architecture comparison table from the 2017 original to 2025's latest models, each module has seen innovation — position encoding has tried absolute, relative, RoPE, and even ALiBi. Around 2023, the field converged: almost everyone adopted RoPE due to superior performance. Llama-like architecture convergence trend — the Llama family, as the most popular open-source model (though this status is being challenged by Qwen), has reference significance for improved architectures.
+In *Attention Is All You Need*, the multi-head attention design uses the following configuration:
 
-We'll focus on **activation functions, FFN, attention variants, and position encoding**. After determining the architecture, we must select hyperparameters: hidden dimension size, MLP inner projection ratio, head count, vocabulary size — all critical decisions for actual LLM training.
+- Model dimension $d_{model} = 512$
+- Number of heads $h = 8$
+- Dimension per head $d_k = d_v = d_{model} / h = 64$
+- Scaling factor $\sqrt{d_k} = \sqrt{64} = 8$
 
-### 4.2.1 Normalization
+This setting makes the computational cost of multi-head attention similar to that of single-head attention: because the dimension of each head is reduced to $d_k=d_{model}/h$, the total computational complexity of multi-head attention is of the same order as single-head attention running on the full $d_{model}$ dimension. This conclusion is stated in the original paper.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-6-Per&PostNorm.png" width="800" alt="4-6-Per&PostNorm">
+In other words, multi-head attention does not buy representational capacity by increasing the total computation; under essentially the same compute budget, it splits the representation space into multiple lower-dimensional subspaces, thereby obtaining richer attention patterns. Under the standard setting $h=8$, $d_k=d_{model}/h=64$, this "similar cost, richer representation" trade-off is one of the core reasons the Transformer architecture chose multi-head attention.
 
-#### 1. Post-Norm (original design)
+**Question: Why use multiple heads instead of a single head?**
 
-$$X = \text{LayerNorm}(X + \text{Sublayer}(X))$$
+**Answer:** To attend to different patterns in parallel; each head can learn a different attention pattern:
 
-This is the original Transformer design: residual stream passes through the sublayer, then added to input, finally LayerNorm.
+For example (this is an illustrative analogy for intuition; in reality it is more of a black box):
+**Head 1**: attends to **syntactic dependencies** (subject-verb-object relations)
+**Head 2**: attends to **coreference relations** (pronoun reference)
+**Head 3**: attends to **semantic similarity** (synonyms)
 
-#### 2. Pre-Norm (modern mainstream)
+**It also improves representational capacity**, because each head computes in a **low-dimensional subspace** ($d_k=64$), which is more efficient than a single head in a high-dimensional space.
+The multi-head mechanism can be understood as extracting features in parallel in multiple low-dimensional subspaces, then concatenating and fusing them, thereby increasing the diversity of representation subspaces and **strengthening expressive power**.
 
-$$X = X + \text{Sublayer}(\text{LayerNorm}(X))$$
+**Computational efficiency is also higher**: the heads can **compute in parallel**, which suits GPU acceleration (as we will see in the GPU chapter), and the total computation is comparable to single-head attention ($d_{model} \times d_{model}$).
 
-Advantages: **more stable training**, no need for complex learning rate warmup, suitable for **extremely deep networks** (100+ layers). Now the default configuration for GPT-3, PaLM, and other large models.
+**Question: Why divide by $\sqrt{d_k}$?**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-7-post&perNormData.png" width="800" alt="4-7-post&perNormData">
+**Answer:** The original paper [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762) explains the necessity of this scaling, which can be understood rigorously from the variance perspective: if the components of $Q$ and $K$ are independent, zero-mean, and unit-variance, then the variance of the $d_k$-dimensional dot product $Q\cdot K=\sum_{i=1}^{d_k}q_i k_i$ is $d_k\cdot \mathrm{Var}(q_i k_i)$, and the standard deviation grows with $d_k$. Dividing by $\sqrt{d_k}$ normalizes the scale of the pre-softmax logits, preventing softmax from degenerating into an approximately one-hot distribution because of large values and entering a saturation region where gradients are near zero. The original paper's "suspicion" can therefore be understood as a **variance-stabilizing** operation.
 
-With Pre-Norm and other stabilization techniques, even without warmup, system performance matches or exceeds carefully-warmup-tuned Post-Norm LayerNorm. Various explanations exist — avoiding inter-layer gradient decay, maintaining constant gradient scale — but the most modern understanding is simply that Pre-Norm is inherently a **more stable training architecture**.
+During the dot product the variance is amplified. The dot product $Q \cdot K = \sum_{i=1}^{d_k} q_i k_i$ has **variance**:
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-34-前后归一化的解释.png" width="800" alt="pre-post-norm-explanation">
+$$
+\text{Var}(Q \cdot K) = \sum_{i=1}^{d_k} \text{Var}(q_i k_i) = d_k \cdot \text{Var}(q_i k_i)
+$$
 
-The core design philosophy is **"keep your residual stream clean."** In Pre-Norm, input $X$ flows unimpeded from bottom to top of the model through residual connections, forming an **obstacle-free gradient highway**. Backpropagation gradients flow losslessly without attenuation or explosion from repeated LayerNorm scaling on the residual path. Post-Norm, with each Transformer block applying normalization, causes complex gradient norm fluctuations during backpropagation.
+Dividing by $\sqrt{d_k}$ re-standardizes the distribution. The effects are:
 
-Today, **Pre-Norm and other LayerNorm techniques are widely used as stability aids when training large neural networks**.
+1. **Keep the variance stable**: no matter how large $d_k$ is, the values fed into $softmax$ stay in a reasonable range
+2. **Avoid vanishing gradients**: the $softmax$ gradients remain at effective values, so backpropagation runs smoothly
+3. **Stabilize training**: the model becomes insensitive to the choice of dimension; the original paper used $d_k=64$ and remained stable
 
-#### 3. "Double Normalization"
+### 2.3 Layer Normalization (LayerNorm) and Residual Connections
 
-Why must LayerNorm only be placed before sublayers? It can also be placed after. Recent research even places LayerNorm both before and after modules. Grok and Gemma2 adopt this approach; OLMo2 only places LayerNorm after FFN and multi-head attention. Evaluations suggest this new approach is more stable and performs better when training larger models.
+**What is normalization?**
 
-#### 4. Simplified Variant: RMSNorm (Most Popular)
+**Normalization is the technique of scaling data according to specific rules** so that it falls into a uniform standard range or distribution. In deep learning, it mainly refers to transforming the activations or weights of intermediate layers of a neural network in order to stabilize training and accelerate convergence.
 
-LayerNorm's mean and std computation is **expensive** and not strictly necessary for Transformers. Essentially all models have switched to RMSNorm, whose core change is: **directly removing the mean-centering step** (and the bias term). LLaMA, PaLM, Chinchilla, T5 have all adopted RMSNorm. Performance is comparable to LayerNorm, but RMSNorm is faster — no mean subtraction means fewer operations; no bias term $\beta$ means fewer parameters to load from memory to compute units.
+The normalization formula in probability theory is $x_{norm} = (x - \mu) / \sigma$, where $\mu$ and $\sigma$ are the mean and standard deviation of the original data. The resulting data distribution is "reset" to a standard state. Subtracting the mean and dividing by the standard deviation for each element yields a **distribution with unit variance and zero mean**.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-35-为什么要RMSNorn.png" width="800" alt="why-rmsnorm">
+The original Transformer's layer normalization:
 
-LayerNorm has stronger expressive power, but RMSNorm has **almost no performance loss in practice** with significant speed advantages. This involves system-architecture co-design: improving **arithmetic intensity** — prioritizing high-density computations like matrix multiplications, avoiding GPU idling from moving fragmented memory data. Mean subtraction contributes limited expressive power, so removing it is reasonable.
+$$
+\text{LayerNorm}(v) = \gamma \frac{v - \mu}{\sigma} + \beta
+$$
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-36-各种操作的计算强度.png" width="800" alt="compute-intensity">
+Similarly, layer normalization normalizes within the same layer (a single sample) and is not essentially different from ordinary normalization.
 
-Although mean subtraction's FLOPs are only ~0.17% of total, runtime does not equal FLOP count. Statistical normalization involves substantial memory movement, and memory access is far slower than computation. Depending on workload, such operations can consume up to 25% of runtime (higher proportion on smaller models). RMSNorm effectively reduces the burden of extremely low arithmetic intensity operations, delivering significant speedup.
+1. **Compute the mean** (over all neurons in the same layer):
 
-In small Transformer experiments switching to RMSNorm, **training steps per second clearly increase**, sometimes even improving model performance. This is a "free lunch" system-level optimization, now widely adopted.
+$$
+\mu = \frac{1}{d} \sum_{i=1}^{d} v_i
+$$
 
-**RMSNorm formula** (removing mean normalization, retaining only variance normalization):
-$$\text{RMSNorm}(v) = \gamma \frac{v}{\sqrt{\frac{1}{d}\sum_{i=1}^{d} v_i^2 + \varepsilon}}$$
+2. **Compute the standard deviation**:
 
-Narang et al. (2020) ablation experiments clearly show: baseline Transformer processes 3.5 steps/second while RMSNorm reaches 3.68 steps/second, with final loss also lower than baseline.
+$$
+\sigma = \sqrt{\frac{1}{d} \sum_{i=1}^{d} (v_i - \mu)^2 + \varepsilon}
+$$
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-8-RMSnorm_exp.png" width="800" alt="4-8-RMSnorm_exp">
+Here $\varepsilon$ is a very small constant (typically between $10^{-6}$ and $10^{-5}$) that prevents division by zero. LayerNorm was first proposed by [Ba, Kiros & Hinton, 2016](https://arxiv.org/abs/1607.06450). Its original form is $\text{LN}(x)=\gamma \frac{x-\mu}{\sqrt{\sigma^2+\varepsilon}}+\beta$, with the normalization statistics computed over **all feature dimensions of a single sample**, not across the batch. The original paper uses a biased variance estimate with denominator $d$ and $\varepsilon$ as a numerical stability term; its purpose is always to prevent division by zero when the variance approaches zero, and its effect on training is negligible within a reasonable range. In the context of LayerNorm, the choice between biased and unbiased estimates has little effect on training, and a denominator of $d$ is the consistent practice of the original paper and mainstream implementations.
 
-> **Q: Why is LayerNorm in the residual (Post-Norm) bad?**
-> **A:** Intuitively, residual connections maintain identity mapping from top to bottom layers, greatly benefiting gradient propagation in extremely deep networks. LSTM-like state space models struggle with gradient backpropagation, while residual connections completely avoid this. Inserting LayerNorm in the middle may interfere with this gradient behavior. Now many models have shifted to RMSNorm — this has become a consensus improvement.
+3. **Normalize**:
 
-#### 5. Normalization New Trend: Double Normalization
+$$
+\hat{v} = \frac{v - \mu}{\sigma}
+$$
 
-In recent years, a more aggressive normalization strategy has emerged: placing LayerNorm **both before and after** sublayers. Typical examples include Grok and Gemma 2; OLMo 2 additionally places LayerNorm after attention and FFN.
+4. **Apply learnable parameters**:
 
-The design intuition stems from practical experience: **"If you encounter stability issues, sprinkling some LayerNorm everywhere often solves the problem."** Though lacking theoretical elegance, this strategy has been repeatedly validated to significantly improve deep Transformer training stability with almost no performance degradation.
+$$
+\text{Output} = \gamma \cdot \hat{v} + \beta
+$$
 
-The design philosophy is **"keep your residual stream clean."** Whether Pre-Norm or double normalization, the core idea is maintaining an obstacle-free gradient highway. In Grok-2, each of its 64 Transformer blocks contains pre_attn_norm, post_attn_norm, pre_moe_norm, post_moe_norm — four normalization layers. Gemma 2 uses RMSNorm both before and after attention and FFN sublayers.
+**Learnable parameters** $\gamma$ (scale) and $\beta$ (shift) have the same dimension as the input. They let the model learn the scaling and shifting itself.
 
-### 4.2.2 Feed-Forward Network
+**What is a residual?**
 
-Original FFN: $\text{FFN}(x) = \max(0, xW_1 + b_1)W_2 + b_2$ — two linear layers with bias + ReLU.
+In deep learning, residual specifically refers to the **residual connection**, also called a **skip connection**. It is a "shortcut" between neural network layers that lets information bypass certain layers and pass through directly.
 
-Modern implementations (non-gated variants) have **removed all bias terms (b)**. Matrix multiplication alone is sufficient for model operation; another reason is optimization stability. While nobody fully understands **why bias terms are particularly detrimental to stability**, clear empirical observations show that **removing bias terms generally stabilizes large neural network training**. Many implementations now completely omit bias terms, training purely in matrix-multiplication settings.
+<div align="center">
+  <img src="./images/4-3-Add&amp;Norm.png" alt="Add&amp;Norm" width="800">
+  <p><em>Figure 3. Add&amp;Norm</em></p>
+</div>
 
-Removing bias terms from linear and normalization layers is not only for reduced memory overhead and improved arithmetic intensity — there's also a widely observed but not fully theoretically explained phenomenon: **bias terms may induce training instability**. Despite the exact mechanism remaining an open question, extensive empirical evidence shows removing bias typically reduces gradient spikes and numerical divergence risks. "Bias-free" design has thus elevated from simple system optimization to a default stability safeguard.
+Residual formula:
 
-Modern non-gated FFN: $\text{FFN}(x) = \max(0, xW_1)W_2$. The rationale for removing bias is almost identical to RMSNorm's.
+$$
+Output=  Input +Layer(Input)
+$$
 
-### 4.2.3 Activation Functions
+As the figure shows, a residual connection simply adds the input $x$ of a sublayer (such as multi-head attention) element-wise to the sublayer output $\text{Sublayer}(x)$, rather than passing through an independent "residual layer." Abstractly, it introduces a shallow information flow that prevents information loss and error amplification as layers deepen; the residual continuously reintroduces earlier information to correct the representation.
 
-Since the invention of Transformer/deep learning, improving activation functions has been a hot area — ReLU, GeLU, Swish, ELU, GeGLU, ReGLU, SeLU, SwiGLU, LiGLU.
+Mathematically, a residual does not force the network to learn the ideal mapping $H(x)$ directly; instead, it lets the network learn the "residual" $F(x)=H(x)-x$. If a layer does not need to perform a transformation, the network only needs to learn $F(x)\approx 0$ and preserve the input $x$.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-9-ReLU&GeLU.png" width="800" alt="4-9-ReLU&GeLU">
+[He et al., 2016, *Deep Residual Learning for Image Recognition*](https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html) (ResNet) systematically generalized and popularized residual connections. The paper's starting point was precisely that "deeper networks are harder to train," and it proposed **not forcing the network to learn the ideal mapping $H(x)$ directly, but instead letting it learn the residual $F(x)=H(x)-x$ relative to the input**. If a layer does not need to perform a transformation, the network only needs to learn $F(x)$ to be close to zero, thereby preserving the input $x$. Even if the sublayer learns poorly, the residual path still guarantees $Output \approx Input$, so the model is no worse than without the added depth. This inductive bias of "identity mapping first" is the key design that makes deep networks optimizable.
 
-**1. ReLU:** $\max(0, x)$. The most basic activation function, extremely simple. Advantage: simple derivative.
+**Layer normalization and residual connections**
 
-**2. GeLU (Gaussian Error Linear Unit):** $\text{GeLU}(x) = x \cdot \Phi(x)$ where $\Phi(x)$ is the standard Gaussian CDF. Essentially like ReLU but with a **bump at the origin** — smoother, more differentiable than ReLU. Used by GPT-1/2/3 and GPT-J. Disadvantage: more computationally complex than ReLU. In practice, polynomial approximations are used due to expensive exact error function computation.
+In the original Transformer paper, layer normalization and residual connections are core designs that work together to ensure stable training of deep networks.
+The original paper performs the residual connection first and then normalization:
 
-**3. Gated Linear Unit (GLU) Family:**
+$$\text{output} = \text{LayerNorm}\big(x + \text{Sublayer}(x)\big)$$
 
-GLU inspired the GLU family. Essentially all post-2023 models use gated linear units.
+Here $x$ is the tensor input to the current sublayer module. $\text{Sublayer}(x)$ is the sublayer's own transformation (for example, multi-head self-attention or a feed-forward network), applied directly to $x$. $x + \text{Sublayer}(x)$ represents the residual connection. $\text{LayerNorm}$ is layer normalization, applied after the residual connection.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-10-GLU.png" width="800" alt="4-10-GLU">
+Compared with the **variant proposed later**, Pre-Norm (normalize first, then sublayer, then residual), this is Post-Norm, with the order: **sublayer → residual → normalization**.
 
-**GLU (family ancestor):** $\text{GLU}(x) = (xW) \odot \sigma(xV)$
+**The residual connection ensures that gradients can flow directly back and at least preserves identity-mapping capability**, while **layer normalization standardizes the distribution after addition and avoids numerical explosion or vanishing**. **Together they make a 6-layer (original paper) or even 12-layer (BERT-base) network trainable.**
 
-GLU can be understood as a **"gating + content"** dual-channel mechanism:
-1. **Content channel:** $xW$ provides original information
-2. **Gating channel:** $\sigma(xV)$ generates 0-1 "switches," determining each neuron's throughput
-3. **Dynamic activation:** Each token gets different gating values, achieving **input-dependent sparsity**
+**Question: What does layer normalization do?**
 
-Like smart blinds — dynamically adjusting each slat's opening based on input, rather than traditional activation's "fully open/fully closed" binary behavior.
+**Answer:**
 
-**GeGLU (Gated GELU):** $\text{GeGLU}(x) = \text{GELU}(xW) \cdot (xV)$. Improvement: smooth GELU replaces Sigmoid as gating function. Advantage: more stable gradients, slightly better performance. Used by Google models (T5, Gemma2/3).
+It addresses distribution shift and gradient instability, standardizes the distribution, accelerates model convergence, and prevents vanishing and exploding gradients.
 
-**SwiGLU (Swish GLU):** $\text{SwiGLU}(x) = \text{Swish}(xW) \odot (xV)$ where $\text{Swish}(x) = x \cdot \sigma(\beta x)$, typically $\beta=1$. Advantage: further performance improvement over GeGLU. Cost: highest computational cost. **SwiGLU is basically what most current models use** — LLaMA series, PaLM, OLMo, etc.
+**Question: What do residual connections do?**
 
-#### Parallel vs. Serial Blocks
+**Answer:**
 
-Standard Transformer blocks are **serial**: attention first, then FFN. Around 2020, GPT-J and PaLM experimented with **parallelized block** design — adding attention and FFN outputs together directly into the residual stream, aiming to reduce latency through operator fusion. However, this parallel structure has been **essentially abandoned** in the past two years. The main reason: parallelization effectively halves model depth, **severely weakening expressive power**. With hardware and software optimization advances, serial computation is sufficiently efficient; parallel marginal benefits can no longer compensate for performance loss. Post-2024 models (LLaMA 3, Qwen 2.5) all return to serial design.
+They ensure that gradients flow directly back, at least preserve identity-mapping capability, provide a stable information pathway, and address the problem that deep networks remain hard to train due to unstable distributions.
 
-> **Q: Are gated units effective?**
-> **A:**
+### 2.4 Feed-Forward Networks (Feed Forward) and Activation Functions
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-11-NoamShazeer.png" width="800" alt="4-11-NoamShazeer">
+<div align="center">
+  <img src="./images/4-4-FeedForward.png" alt="FeedForward" width="800">
+  <p><em>Figure 4. FeedForward</em></p>
+</div>
 
-Noam Shazeer's original paper evaluated all GLU variants. These data are relatively early, but you can see performance on CoLA and SST-2 tasks. GLU variants consistently outperform: GLU achieves 84.20, 84.12, 84.36, 84.67 respectively. Notably, this is 2020 research, and they even provided standard deviations to assess result significance — these results are indeed statistically significant. This is good empirical evidence.
+The activation function used in the original Transformer paper *Attention Is All You Need* is **ReLU** (Rectified Linear Unit), applied specifically in the **position-wise feed-forward networks**.
 
-Narang et al.'s 2020 paper is also worth noting. This high-quality study tested various architectural variants on T5-like models. Again, gated linear unit variants consistently achieve lower loss values, with bolded rows corresponding to GLU variants. This advantage pattern has persisted to this day.
+**Where ReLU is applied**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-12-Narang_exp.png" width="800" alt="4-12-Narang_exp">
+In each layer of the encoder and decoder, the feed-forward network has the structure:
 
-Regarding gating and activation functions, different models have many variants, but gated linear units have essentially become the mainstream choice. However, it must be clear that **excellent models don't necessarily require GLU**. We cannot consider it indispensable just because of its slight advantage and widespread use. **There are indeed many high-performance model cases that don't use GLU**. For example, GPT-3; the newer Nemotron 340B used squared ReLU — a design not seen before. And Falcon 211B uses ReLU activation. Both are relatively high-performance models. Therefore, this is clearly not a necessary choice. Existing evidence does suggest that SwiGLU and GeGLU bring consistent performance gains.
+$$
+\text{FFN}(x) = \max(0, xW_1 + b_1)W_2 + b_2
+$$
 
-### 4.2.4 Position Encoding
+**The first layer** is a **linear transformation** + **ReLU activation**; **the second layer** is only a **linear transformation**, with no activation function.
 
-Discussing position encoding evolution fully would take forever. We'll focus on **RoPE** — the position encoding used by almost all advanced models — with only brief mentions of others.
+**Specific parameter configuration**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-13-posEmbedding.png" width="800" alt="4-13-posEmbedding">
+According to the original paper:
 
-#### 1. Absolute Embedding — Sinusoidal Embedding
+| Parameter | Value | Description |
+|------|-----|------|
+| **Input/output dimension** | $d_{\text{model}} = 512$ | Same as the model's main dimension |
+| **Intermediate layer dimension** | $d_{\text{ff}} = 2048$ | Expanded 4× and then compressed |
+| **Activation function** | $ReLU$ | Applied only in the first layer |
 
-Assigns a unique encoding vector to each sequence position, added to word embeddings: $\text{Final Embedding} = \text{Token Embedding} + \text{Positional Embedding}$. T5 and others use relative position encoding. Sinusoidal encoding is a type of absolute position encoding — the original Transformer's parameter-free method using sine/cosine functions to generate unique patterns. Advantages: parameter-free, computationally efficient, theoretically extensible to unseen longer sequences. Disadvantages: absolute position perception cannot directly model relative distance; long sequence performance degrades.
+**The complete flow** is: **512-dimensional input** → **linear layer (512→2048)** → **ReLU** → **linear layer (2048→512)** → output.
 
-#### 2. Relative Embedding — RoPE (Rotary Position Embedding)
+**Why ReLU?**
 
-Core idea: model relative distance between tokens rather than absolute positions. Instead of encoding absolute positions, **explicitly introduce relative position information into attention computation** by adding vectors that make the model attend to inter-token distance. RoPE is a type of relative embedding.
+ReLU is **computationally efficient**. Compared with Sigmoid/Tanh, ReLU's derivative is simple (0 or 1). ReLU's **computational efficiency** comes precisely from its derivative being identically 1 on the positive interval and 0 on the negative interval: unlike Sigmoid/Tanh, which require computing exponentials or divisions, ReLU needs only comparisons and multiplications in both the forward and backward passes, significantly reducing computational overhead in deep networks that are called very frequently. The original Transformer paper [Vaswani et al., 2017](https://arxiv.org/abs/1706.03762) adopts precisely $\mathrm{FFN}(x)=\max(0,xW_1+b_1)W_2+b_2$ in Section 3.3, i.e., ReLU applied after the first linear transformation.
 
-RoPE was first proposed by Jianlin Su in 2021 in "RoFormer: Enhanced Transformer with Rotary Position Embedding." GPT-J was among the first notable open-source models to adopt RoPE. Today, **RoPE has multiple context-length extension algorithms** — a critical component of modern production-grade language models. Even in small-scale, short-context scenarios, empirical effects are very significant; RoPE has essentially won the position embedding competition.
+**Question: What basic properties does a qualified activation function need?**
 
-**What is rotation?** The concept relates to complex numbers. In 2D space, a vector $v = (x,y)$ represented as complex number $z = x + iy$; rotating by $\theta$ is equivalent to multiplying by $e^{i\theta}$, which in vector space equals **multiplying by a rotation matrix**:
+**Answer:**
 
-$$R(\theta) = \begin{bmatrix}\cos\theta & -\sin\theta \\ \sin\theta & \cos\theta\end{bmatrix}, \quad R(\theta) \cdot v = \text{rotated vector}$$
+First, it must be **nonlinear**. An activation function must be nonlinear, because a composition of linear functions is still a linear function: no matter how deep the network is, if every layer is only a linear transformation, the entire network is equivalent to a single linear mapping that can only fit linearly separable functions, and stacking more layers brings no gain in representational capacity.
 
-**Rotation matrix properties:** orthogonal (inverse = transpose), determinant = 1 (preserves vector length), periodic ($R(\theta+2\pi)=R(\theta)$), additive ($R(a+b)=R(a)R(b)$ — **we'll use this right away**).
+The rigorous mathematical statement of this intuition comes from the **universal approximation theorem**: [Cybenko, 1989,](https://doi.org/10.1007/BF02551274) proved that a feed-forward network with only **a single hidden layer** and a continuous sigmoidal nonlinear activation can uniformly approximate any continuous function on the unit hypercube to arbitrary accuracy; [Hornik, 1991](https://doi.org/10.1016/0893-6080(91)90009-T) further relaxed the condition to "any bounded, non-constant activation function." In other words, **nonlinear activation is a necessary condition for a neural network to be a universal function approximator**; without nonlinearity, a deep network strictly degenerates into a linear model in terms of expressive power. ReLU is exactly such a nonlinear function: it inserts a nonlinear switch between the two linear transformations of the FFN, enabling the feed-forward sublayer to learn nonlinear combinations of the input rather than merely performing a linear projection.
 
-When we rotate both Q and K matrices: $Q_1 = R(m)Q$, $K_1 = R(n)K$. During attention computation:
-$$Q_1 \cdot K_1^T = R(m)R(n)^T QK^T = R(m)R(-n) QK^T = R(m-n) QK^T$$
+Second, it must be **differentiable**, i.e., differentiable almost everywhere in its domain, to support gradient descent and backpropagation; otherwise gradient descent cannot be used to train the model. ReLU is not differentiable at $x=0$, but in practice a subgradient can be used with good results.
 
-We achieve **relative position information**: the inner product depends only on the relative distance $(m-n)$!
+Third, **computation must be simple and efficient**. An activation function is called billions of times during model inference and training, so its computational cost must not be too high at such scale.
 
-For high dimensions, RoPE splits the vector into multiple 2D sub-blocks, independently rotating each at different frequencies $\theta_i = 10000^{-2i/d}$. Some dimensions rotate quickly (capturing high-frequency, short-range information) while others rotate slowly (capturing low-frequency, long-range positional information).
+## 3 Modern Variants of the Transformer and Representative Models
 
-Unlike the original paper's sinusoidal embedding, RoPE operates **within the attention layer itself** — each attention computation intervenes at that layer to obtain positional information.
+We have introduced the standard Transformer architecture. In recent years, many high-quality papers and models have emerged: Command A, OLMo 2, SmolLM, Phi-4, and then Gemma 3, Qwen 2.5, InternLM... more and more models, enough to fill an entire screen. About 19 dense models were released last year, most of them involving subtle architectural adjustments.
 
-**Why everyone loves RoPE:** 1. **Explicit relative position** — inner product depends only on relative distance, aligning with attention's essence. 2. **Unlimited extrapolation** — orthogonal rotation extends infinitely. 3. **Parameter-free and efficient** — zero extra parameters, negligible compute overhead.
+<div align="center">
+  <img src="./images/4-5-models.png" alt="models" width="800">
+  <p><em>Figure 5. models</em></p>
+</div>
 
-#### P-RoPE (Proportional RoPE) — Gemma 4, 2026
+We will find that studying only the standard architecture of the original paper is increasingly insufficient for the market's accelerating innovation. Here is an architecture comparison table from the original 2017 Transformer to the latest 2025 models.
 
-A lightweight RoPE variant: **only rotates the first 25% of dimensions per attention head**, keeping the rest unchanged. The hypothesis: high-frequency position changes can be sufficiently expressed through a minority of dimensions, while most dimensions remain pure content representations, reducing position signal interference in semantic space. Gemma 4 even uses a "dual RoPE" configuration: sliding window layers use standard RoPE (theta=10,000) while global attention layers use P-RoPE (theta=1,000,000).
+You will notice that each module has some innovation. In the **positional encoding** column, for example, people have tried absolute positional encoding, relative positional encoding, and RoPE, and some models even went through an ALiBi stage. Convergence came later: starting around 2023, everyone began adopting RoPE because it performs better! The Llama-like architecture convergence trend—Llama being the most popular open-source model (**a status now being challenged by the Qwen series**)—means its improved architecture has **reference value**.
 
-### 4.2.5 Attention Variants
+I will focus on **activation functions, feed-forward networks, attention mechanism variants, positional encoding**, and all related components. Once the architecture is determined, what do we need to do? We need to choose hyperparameters: how large should the hidden dimension be? How large should the MLP's internal projection layer be? How should the number of dimensions be handled? What vocabulary size? These are all important decisions that must be made when actually training a language model.
 
-In traditional attention, each head gets its own unique Q, K, V matrices — for $h_1$, $Q_1, K_1, V_1$ are three different matrices; $h_2$ gets different $Q_2, K_2, V_2$.
+We will introduce the common architectural variants:
 
-#### 1. KV Cache
+1. Activation functions
+2. Attention variants
+3. Position embeddings
+4. Normalization
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-14-KV_cache.png" width="800" alt="4-14-KV_cache">
+### 3.1 Normalization
 
-During autoregressive generation, we generate one token at a time. We store historically computed K and V values — this avoids recomputing them for each new token. This is called the **KV cache**. (Detailed in the inference chapter.)
+<div align="center">
+  <img src="./images/4-6-Per&amp;PostNorm.png" alt="Per&amp;PostNorm" width="800">
+  <p><em>Figure 6. Per&amp;PostNorm</em></p>
+</div>
 
-#### 2. MQA (Multi-Query Attention) and GQA (Grouped-Query Attention)
+**Placement: Post-LN (the original paper's design, post-normalization)**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-15-MQA.png" width="800" alt="4-15-MQA">
+**Structure**: sublayer → residual connection → layer normalization
 
-To reduce KV Cache memory pressure, two variants emerged:
-- **MQA**: All heads share a single K and V. Dramatically reduces cache size (by factor of $h$). Slight quality trade-off.
-- **GQA**: Groups of heads share K and V. Balances quality and efficiency. Used by LLaMA 2/3, Gemma, etc. — the current mainstream compromise.
+$$
+X = \text{LayerNorm}(X + \text{Sublayer}(X))
+$$
 
-##### Why Is GQA So Effective? From the Perspective of KV Cache Arithmetic Intensity
+This is the design of the original Transformer paper, i.e., the post-normalization scheme (**left figure**): the gray residual stream passes through the sublayer, is then added to the input, and finally LayerNorm is applied. But people soon found that moving LayerNorm before the residual connection (i.e., pre-normalization) yields better results in many respects (**right figure**, Pre-LN).
 
-GQA not only saves memory — more critically, it addresses the **Arithmetic Intensity bottleneck** in the autoregressive inference phase.
+**Placement: Pre-LN (the modern mainstream, pre-normalization)**
 
-During autoregressive generation, every step requires reading all historical Keys and Values from the KV Cache for incremental computation. At this point, memory access surges while compute stays constant, causing **arithmetic intensity to plummet** — the GPU spends most of its time waiting for data movement. Its arithmetic intensity is roughly proportional to:
+**Structure**: layer normalization → sublayer → residual connection
+
+$$
+X = X + \text{Sublayer}(\text{LayerNorm}(X))
+$$
+
+Pre-LN places LayerNorm before the sublayer, so the residual connection retains a direct path that does not pass through normalization, improving the stability of gradient propagation in deep Transformers. As for its advantages, [Xiong et al., 2020](https://proceedings.mlr.press/v119/xiong20b.html), starting from the gradient scale at initialization, also point out that in Post-LN the expected gradient near the output layer is large and easily causes training instability, whereas Pre-LN alleviates this problem and reduces dependence on learning-rate warm-up.
+
+Note that **Pre-LN being more stable does not mean Post-LN is worse in all cases**; the two have different advantages at different network depths. However, Pre-LN has its own limitations. Recent research, [*The Curse of Depth in Large Language Models* (2025)](https://arxiv.org/abs/2502.05795), found that as network depth increases, the activation variance in the Pre-LN residual stream may keep growing, degrading the feature-learning ability of deep modules. This shows that although Pre-LN improves gradient propagation, it does not fully solve the training-stability problem of deep Transformers, and it has also motivated improvements such as LayerNorm Scaling.
+
+<div align="center">
+  <img src="./images/4-7-post&amp;perNormData.png" alt="post&amp;perNormData" width="800">
+  <p><em>Figure 7. post&amp;perNormData</em></p>
+</div>
+
+With pre-normalization combined with other stabilization techniques, the system can match or even **outperform** post-normalization LayerNorm that requires a carefully designed warm-up, even without a **warm-up mechanism**. The left figure shows results in a **machine translation** setting, while the right figure shows trends across various tasks (especially BERT trained with post-normalization).
+
+There are **multiple explanations** for the advantages of pre-normalization. [Takase et al., 2022,](https://arxiv.org/abs/2206.00330) explicitly propose that "**the LN in Post-LN is the main source of the vanishing-gradient problem**, causing training instability, whereas Pre-LN avoids this problem." Meanwhile, the explanation in terms of **gradient scale at initialization** is provided by [Xiong et al., 2020](https://proceedings.mlr.press/v119/xiong20b.html): the excessively large expected gradient near the output layer in Post-LN is the direct cause of training instability. Therefore, "Pre-LN is more stable" and "Post-LN is not necessarily worse in shallow networks" are not contradictory: Pre-LN provides a more predictable gradient scale **in deep settings that do not require fine-grained warm-up**, but this does not mean Post-LN is inferior to Pre-LN at all depths and under all conditions. The contribution of Takase et al. lies precisely in revealing the mechanism of this trade-off and, on that basis, proposing the B2T connection, which balances stability and effective training in deep networks.
+
+<div align="center">
+  <img src="./images/4-34-pre-and-post-normalization-explained.png" alt="Pre- and post-normalization explained" width="800">
+  <p><em>Figure 8. An explanation of pre- and post-normalization</em></p>
+</div>
+
+Early research focused on removing the learning-rate warm-up stage, because training Transformers usually depends on warm-up, and eliminating this step would significantly simplify the training process. For example, [Nguyen and Salazar (2019)](https://aclanthology.org/2019.iwslt-1.17/) found experimentally that Pre-LN combined with small parameter initialization enables stable training without warm-up. Subsequently, [Xiong et al. (2020)](https://proceedings.mlr.press/v119/xiong20b.html) also found that the original Post-LN Transformer is prone to training instability without warm-up, whereas Pre-LN can achieve good convergence even without warm-up. However, [Liu et al. (2020)](https://aclanthology.org/2020.emnlp-main.463/) showed that with improved parameter initialization, Post-LN can also be trained without warm-up, indicating that the placement of normalization is not the only factor affecting training stability.
+
+Further research explains Pre-LN's stability advantage in deep Transformers from the perspective of gradient propagation and signal transmission. The key is that Pre-LN places LayerNorm before sublayers such as attention and feed-forward networks, so the residual connection retains an identity-mapping path that does not pass through normalization. Consequently, during backpropagation, gradients can not only pass back through each sublayer but also propagate directly along the residual path, alleviating vanishing gradients in deep networks. [Takase et al. (2022)](https://arxiv.org/abs/2206.00330) point out that the LayerNorm in Post-LN is one of the important causes of vanishing gradients, and that Pre-LN can effectively alleviate this problem. [Kedia et al. (2024)](https://proceedings.mlr.press/v235/kedia24a.html) analyzed how gradients vary with network depth under different normalization structures and found that, in their setting, the backward gradient variance of Pre-LN grows hyperbolically, whereas that of Post-LN decays exponentially. This shows that although Pre-LN improves the gradient-propagation conditions in deep networks, it does not mean the gradient norm stays constant; as depth increases, reasonable parameter initialization and residual scaling are still needed to maintain signal stability.
+
+From the design principle of "keeping the residual stream clean," pre-normalization is clearly more reasonable. Experimental data (such as the study by [Nguyen and Salazar (2019)](https://aclanthology.org/2019.iwslt-1.17/) and others) also confirm that pre-normalization significantly improves the size and frequency of gradient spikes and is overall more stable than post-normalization. It is precisely this stability and its ability to support deep architectures that make the scheme essential for modern large language models. As a result, "moving layer normalization out of the residual stream" has become a standard practice widely adopted in the industry.
+
+Today, **pre-normalization and other LayerNorm techniques are widely used as stability aids when training large neural networks**.
+
+**Structurally, "double normalization"**
+
+LayerNorm is not limited to the sublayer input. In recent years, research has begun to explore more diverse normalization layouts. For example, Google DeepMind adopted a front-and-back double normalization structure in Gemma 2, applying RMSNorm at both the input and output positions of the attention and feed-forward sublayers to enhance training stability. In contrast, Allen AI's OLMo 2 adopted a sublayer post-normalization strategy, placing RMSNorm at the outputs of attention and feed-forward networks, combined with QK-Norm to control the numerical scale in attention computation. These practices show that Pre-Norm is not the only feasible design.
+
+[Kim et al. (2025)](https://proceedings.mlr.press/v267/kim25u.html) further systematically studied the effects of different normalization positions on activation variance and gradient propagation, and proposed Peri-LN, which achieved good training stability in experiments with up to 3.2B parameters. In addition, controlled-variable studies have pointed out that architectural factors such as normalization position and QK-Norm, as well as their combinations, significantly affect a model's long-context extension capability. Thus, normalization design in modern Transformers is moving from a single Pre-Norm scheme toward a coexistence of multiple strategies.
+
+**A simplified variant: RMSNorm (the most popular)**
+
+LayerNorm's computation of the mean and standard deviation is **expensive**, and it is not necessary for the Transformer. Most modern models have now switched to RMSNorm, whose core change is to remove the mean-adjustment step entirely. So you do not subtract the mean, and you do not add a bias term. Many well-known models adopt this approach. **The LLaMA series, Chinchilla, T5, and Gemma**, among others, have all moved to RMS normalization (PaLM still uses LayerNorm without bias). Models trained with RMS normalization perform comparably to those trained with layer normalization. But the real reason is that RMS normalization is faster and works just as well. Not subtracting the mean means fewer arithmetic operations. Second, not needing to add the bias term $\beta$ means fewer parameters must be loaded from memory into the compute units. This means comparable or even better results can be achieved with fewer operations and less compute.
+
+<div align="center">
+  <img src="./images/4-35-why-RMSNorm.png" alt="Why RMSNorm" width="800">
+  <p><em>Figure 9. Why RMSNorm</em></p>
+</div>
+
+<div align="center">
+  <img src="./images/4-36-arithmetic-intensity-of-operations.png" alt="Arithmetic intensity of various operations" width="800">
+  <p><em>Figure 10. Arithmetic intensity of various operations</em></p>
+</div>
+
+LayerNorm has stronger expressive power than RMSNorm, but the latter has **almost no performance loss in practice** and a significant speed advantage. This involves co-design of systems and architecture, improving **arithmetic intensity**, i.e., prioritizing high-density computations such as matrix multiplication and avoiding GPUs sitting idle inefficiently while moving small, fragmented pieces of memory. Subtracting the mean contributes little to expressive power, so removing it is a reasonable choice.
+
+Although subtracting the mean accounts for only about 0.17% of total floating-point operations, runtime is not equivalent to floating-point operation count. Statistical normalization involves a large amount of memory traffic, and memory access is much slower than computation. Depending on the workload, such operations can consume up to 25% of runtime, and this proportion is even larger for small models, because when activation sizes are relatively large, the cost of repeatedly moving data between fast and slow memory becomes especially prominent. RMSNorm can therefore effectively reduce the load of operations with very low arithmetic intensity, yielding a significant speedup.
+
+Practical evaluation confirms this. **After switching to RMSNorm in small Transformer models, training steps per second increase noticeably**, and sometimes model performance improves as well. This is effectively a "free" system-level optimization, which is why the scheme is now widely adopted.
+
+By extension, the same principle applies to removing bias terms from neural networks. The linear layers of the original Transformer all had biases, but modern implementations have mostly dropped them. Bias terms have low arithmetic intensity and relatively high memory-traffic cost, and can sometimes cause stability problems. Removing such redundant operations yields free system gains while simplifying the architecture, which is why it has become the mainstream design choice.
+
+The original Transformer's layer normalization:
+
+$$
+\text{LayerNorm}(v) = \gamma \frac{v - \mu}{\sigma} + \beta
+$$
+
+**Formula** (mean normalization removed, only variance normalization retained):
+
+$$
+\text{RMSNorm}(v) = \gamma \frac{v}{\sqrt{\frac{1}{d}\sum_{i=1}^{d} v_i^2 + \varepsilon}}
+$$
+
+Models in practice all demonstrate that removing mean normalization and keeping only variance normalization gives better results and faster computation.
+
+The original RMSNorm paper (Zhang & Sennrich, 2019) reports speed improvements ranging from about 7% to 64% (depending on model and implementation), while performance is comparable to LayerNorm on most tasks; subsequent systematic ablation experiments have repeatedly observed this trend of "faster with no loss in quality."
+
+<div align="center">
+  <img src="./images/4-8-RMSnorm_exp.png" alt="RMSnorm_exp" width="800">
+  <p><em>Figure 11. RMSnorm_exp</em></p>
+</div>
+
+The runtime benefits of RMSNorm can already be observed in the paper.
+
+**Question: Why is LayerNorm in the residual path bad (Post-Norm)?**
+
+**Answer:**
+
+The intuitive explanation is that the residual connection lets the network **maintain an identity mapping from the top layer to the bottom layer**, which is very beneficial for **gradient propagation** when training very deep networks. Recurrent neural networks such as LSTMs have difficulty with gradient backpropagation, and residual connections avoid this problem entirely. Inserting LayerNorm in the middle may interfere with this gradient behavior, which is consistent with the gradient-spike phenomenon shown earlier. Although LayerNorm works well, **many models today have switched to RMSNorm, which has become a consensus improvement**.
+
+**A new normalization trend: double normalization (Pre + Post Norm)**
+
+In recent years, a more aggressive normalization strategy has gradually emerged: placing **LayerNorm both before and after** a sublayer (such as attention or FFN), forming "double normalization." Typical representatives include Grok and Gemma 2. Notably, OLMo 2 chose a different path—it switched from OLMo 1's Pre-Norm back to **Post-Norm** (RMSNorm applied after the outputs of attention and FFN) and introduced QK-Norm to stabilize attention computation, so it does not belong to the "double normalization" camp.
+
+The intuition behind this design comes from a practical rule of thumb: **"If you run into stability problems, sprinkling some LayerNorm around often fixes them."** Although this sounds theoretically inelegant, the strategy has repeatedly been shown to significantly improve the training stability of deep Transformers with almost no loss in performance.
+
+**The design philosophy is "keep your residual stream clean."** Whether Pre-Norm or double normalization, the core idea is to **keep the residual stream clean**. In a Pre-Norm architecture, the residual connection from the bottom to the top of the model forms an **unobstructed gradient highway**, allowing gradients to flow back without loss during backpropagation, without being attenuated or amplified by repeated scaling of the residual path by layer normalization. This intuitive principle explains why most modern models move layer normalization out of the residual stream (with a few exceptions such as OLMo 2), and it further motivated the practice of double normalization.
+
+Take Grok-1 as an example: each of its 64 Transformer blocks contains four layer normalizations—pre_attn_norm, post_attn_norm, pre_moe_norm, and post_moe_norm. Gemma 2 uses RMSNorm both before and after the attention and FFN sublayers. This "double normalization" strategy has been validated by models such as Grok and Gemma 2 as an effective means of improving deep-training stability.
+
+### 3.2 Feed-Forward Networks
+
+The feed-forward network in the original Transformer:
+
+$$
+FFN(x) = max(0, xW_1 + b_1)W_2 + b_2
+$$
+
+The original Transformer's feed-forward network consists of a linear layer with bias → ReLU → a second linear layer. Most modern implementations (the non-gated version) have **removed the bias term (b)**—though not all of them; the Q/K/V projections in the Qwen2 series, for example, still keep biases. One reason for removing the bias is that matrix multiplication alone is enough for the model to run. The other reason is optimization stability. Removing bias terms reduces memory traffic and operator complexity at the engineering level; its contribution to training stability comes mainly from large-scale empirical observations reported by models such as PaLM, while the precise theoretical mechanism remains an open question. As a result, many implementations now omit bias terms entirely and train only in these pure matrix-multiplication settings.
+
+Removing bias terms from linear and normalization layers is not only about reducing memory overhead and improving arithmetic intensity; there is also a widely observed phenomenon that is not yet fully explained theoretically: **bias terms may induce training instability**. Although the exact mechanism remains an open question, extensive empirical experience shows that removing bias terms usually reduces the risk of gradient spikes and numerical divergence. Thus, in modern architectures, "bias-free" design has risen from a purely system-level optimization to a default stability safeguard.
+
+Most implementations of modern models (if not gated):
+
+$$
+\mathrm{FFN}(x) = \max(0, xW_1)W_2
+$$
+
+The rationale for removing the bias term $b$ from the FFN is almost the same as for RMSNorm. The idea of removing bias is broadly applicable, and many models have no bias terms in most places at all.
+
+### 3.3 Activation Functions
+
+Ever since the Transformer, or deep learning itself, was invented, people have been keen to improve activation functions. There is a whole pile of them—ReLU, GeLU, Swish, ELU, GeGLU. There are different types of MLPs—GeGLU, ReGLU, SeLU, SwiGLU, and LiGLU. What are they? What do people use them for, and how much does it matter?
+
+<div align="center">
+  <img src="./images/4-9-ReLU&amp;GeLU.png" alt="ReLU&amp;GeLU" width="800">
+  <p><em>Figure 12. ReLU&amp;GeLU</em></p>
+</div>
+
+**1. ReLU**
+
+We introduced the ReLU function in the review of the Transformer. It simply takes the maximum of 0 and the input. This is the most basic activation function and is quite simple. One advantage is that its **derivative is simple**.
+
+**2. GeLU**
+
+GeLU, also called the **Gaussian Error Linear Unit**, multiplies the linear part by the cumulative distribution function of the Gaussian distribution. So it is basically like ReLU, but with a **bump** at the origin. In the figure above you can see a slight protrusion at the origin; otherwise its shape is essentially the same as ReLU. ReLU changes abruptly at the origin, which means it is **not differentiable at the origin**, whereas **GeLU improves on this shortcoming and makes the function more differentiable**, which may or may not help training. The GPT series—including GPT-1/2/3 and GPT-J—uses the GeLU activation function. The original Transformer and some early models used ReLU.
+
+$$ \text{GeLU}(x) = x \cdot \Phi(x) $$
+
+where $\Phi(x)$ is the cumulative distribution function (CDF) of the standard Gaussian distribution:
+
+$$ \Phi(x) = P(X \le x) = \frac{1}{2} \left[1 + \text{erf}\left(\frac{x}{\sqrt{2}}\right)\right] $$
+
+One disadvantage is that it is more computationally complex than ReLU and consumes more computational resources. Because exactly computing the error function is expensive, GeLU is approximated by a polynomial in practice; we will discuss this in the high-performance programming chapter.
+
+**Gated Linear Units (GLU)**
+
+After the GLU gating mechanism was introduced into the Transformer FFN and combined with activation functions such as GeLU and Swish, variants such as GeGLU and SwiGLU emerged; GeLU itself is one of the optional "content transformation" functions in these variants.
+After 2023, gated linear units became the mainstream choice, though not all models adopt them (for example, Nemotron and Falcon, mentioned below).
+
+<div align="center">
+  <img src="./images/4-10-GLU.png" alt="GLU" width="800">
+  <p><em>Figure 13. GLU</em></p>
+</div>
+
+**GLU, the ancestor of the gated family**
+
+$$
+\text{GLU}(x) = (xW) \odot \sigma(xV)
+$$
+
+where:
+**$x \in \mathbb{R}^{d_{\text{model}}}$**: the input vector
+**$W, V \in \mathbb{R}^{d_{\text{model}} \times d_{\text{ff}}}$**: two independent linear transformation matrices
+
+**$\sigma$**: the Sigmoid function, which compresses the gate values into **(0, 1)**
+
+**$\odot$**: element-wise multiplication (Hadamard product)
+
+GLU can be understood as a **"gate + content"** two-channel mechanism:
+
+1. **Content channel**: $xW$ provides the original information
+2. **Gate channel**: $\sigma(xV)$ generates a 0–1 "switch" that determines how much each neuron passes through
+3. **Dynamic activation**: the gate value differs for every token, realizing **input-dependent sparsity**
+
+It can be understood this way: we apply **gating** to the MLP's hidden layer. After the original activation function maps the input into the hidden space, we gate it with $x\cdot V$ and then project it back to the hidden dimension through $W_2$. The core operation here is **element-wise gating**.
+It is like a smart Venetian blind that dynamically adjusts the opening of each slat according to the input, rather than the "fully open / fully closed" behavior of a traditional activation function. Because the multiplication is element-wise, each element of $\sigma(xV)$ multiplies the corresponding element of $(xW)$; $\sigma(xV)$ can be understood as generating a zero-to-one switch for each element. Where the product with $(xW)$ is zero, the result is zero; where it is one, the value is unchanged; in between, it is effectively applying a weight.
+
+**Mainstream gated variants**
+
+**GeGLU (Gated GELU)**
+
+$$
+\text{GeGLU}(x) = \text{GELU}(xW) \odot (xV)
+$$
+
+The difference from GLU is that **the activation function is changed from Sigmoid on the gate branch to GELU on the content branch**, i.e., $\mathrm{GELU}(xW)\odot(xV)$, and the gate branch $(xV)$ itself no longer has an activation. The **advantage** of this is more stable gradients and slightly better performance. This architecture is used by many Google models, such as **T5 v1.1**, Gemma 2/3, etc. (the original T5 used a ReLU FFN).
+
+**SwiGLU (Swish GLU)**
+
+$$
+\text{SwiGLU}(x) = \text{Swish}(xW) \odot (xV)
+$$
+
+where $\text{Swish}(x) = x \cdot \sigma(\beta x)$, whose shape is similar to the Gaussian error unit; usually $\beta=1$, and $\sigma(x) = \frac{1}{1 + e^{-x}}$.
+
+Its **advantage** is that it gives a **slight performance improvement** over GeGLU; computationally, Swish requires only one sigmoid and is usually not more expensive than GELU, which needs erf, but the overall GLU structure still has one more projection matrix than a single-path ReLU FFN.
+
+SwiGLU is basically the structure adopted by most models today, such as the LLaMA series, PaLM, OLMo, and so on.
+
+**The choice between parallel and serial layers**
+
+The standard Transformer Block is **serial**: attention is computed first, then the FFN. Around 2020, GPT-J and PaLM tried a **parallelized Block** design, in which the outputs of attention and the FFN are added directly and injected together into the residual stream, in the hope of reducing latency and improving system utilization through operator fusion.
+
+However, this parallel structure has largely **fallen out of use** over the past two years. The main reason is that the parallel structure changes the information flow between sublayers: in the serial design, the FFN takes the **output** of attention as input and has the opportunity to perform further layer-by-layer transformation on the representation extracted by attention; in the parallel design, attention and the FFN process the same input independently, and the FFN no longer has the opportunity to consume the information processed by attention, losing the composite expressive ability of "route first, then transform." With advances in hardware and software optimization, the serial form has become efficient enough that the system overhead saved by parallelism no longer compensates for this loss of expressive power.
+
+As a result, mainstream models since 2024 (such as LLaMA 3 and Qwen 2.5) have returned to the serial design. This rise and fall fully demonstrates that **architecture design is a delicate trade-off between expressive power and system efficiency**.
+
+**Question: Are gated units effective?**
+
+**Answer:**
+
+<div align="center">
+  <img src="./images/4-11-NoamShazeer.png" alt="NoamShazeer" width="800">
+  <p><em>Figure 14. NoamShazeer</em></p>
+</div>
+
+In the paper [*GLU Variants Improve Transformer*](https://arxiv.org/abs/2002.05202), Noam Shazeer (2020) systematically evaluated the application of gated linear unit variants such as GLU, GEGLU, SwiGLU, and ReGLU in Transformer feed-forward networks. The experimental results showed that, under roughly matched parameter count and computation, the four GLU variants achieved average scores of 84.20, 84.12, 84.36, and 84.67 on the GLUE benchmark, all higher than the traditional ReLU baseline of 83.80. This result indicates that introducing gating into the feed-forward network can bring some performance improvement in that experimental setting, and it provided early empirical evidence for the subsequent widespread adoption of SwiGLU and other gated activation functions in large language models. Note that the paper points out that the experimental results have some fluctuation, so these data are better treated as empirical evidence of performance improvement rather than as direct proof of statistical significance.
+
+In the paper [*Do Transformer Modifications Transfer Across Implementations and Applications?*](https://arxiv.org/abs/2102.11972), Narang et al. (2021) systematically evaluated more than 40 Transformer architecture variants. The experiments were based on a T5-base-scale model, comparing the effects of different architectural modifications under a unified training configuration. The results showed that most architectural changes do not reliably improve performance, and that GLU-type activation functions are among the more prominent improvements. In the pretraining stage, the final losses of GLU, GeGLU, ReGLU, SwiGLU, and LiGLU were 1.814, 1.792, 1.803, 1.789, and 1.798, respectively, all lower than the traditional ReLU baseline of 1.838. Among them, SwiGLU and GeGLU showed performance advantages in pretraining, fine-tuning, and supervised training tasks without a clear sacrifice in runtime efficiency. This further indicates that gated linear units not only have an advantage in a single experiment but also show good transferability under a unified experimental framework.
+
+<div align="center">
+  <img src="./images/4-12-Narang_exp.png" alt="Narang_exp" width="800">
+  <p><em>Figure 15. Narang_exp</em></p>
+</div>
+
+There are many variants of gating and activation functions across models, but gated linear units have basically become the mainstream choice. Of course, it must be clear that **a good model does not necessarily have to use GLU**. Its slight advantage and widespread use do not make it indispensable. **There are indeed many high-performance models that do not use GLU.** For example, GPT-3; the newer Nemotron-4 340B uses squared ReLU, a design rarely seen before; and Falcon-2 11B uses a non-gated 4× MLP + GELU. Both are relatively high-performance models. So this is evidently not a necessary choice. The available evidence does show that SwiGLU and GeGLU can bring consistent performance improvements.
+
+### 3.4 Positional Encoding
+
+Explaining the development of positional encoding clearly is a very laborious task. We will focus on **RoPE**, the positional encoding used by almost all advanced models, and cover the others only briefly. Otherwise we could talk for three days and three nights without finishing.
+
+<div align="center">
+  <img src="./images/4-13-posEmbedding.png" alt="posEmbedding" width="800">
+  <p><em>Figure 16. posEmbedding</em></p>
+</div>
+
+**Absolute embedding: sine embeddings**
+
+It assigns **a unique encoding vector to each position** in the sequence and adds it to the word embedding:
+
+$$
+\text{Final Embedding} = \text{Token Embedding} + \text{Positional Embedding}
+$$
+
+Models such as T5 instead use relative positional encoding.
+
+**Sine embedding is a kind of absolute positional encoding.**
+
+The **fixed absolute positional encoding** proposed in the original Transformer paper uses sine/cosine functions to generate a unique pattern:
+
+$$
+PE_{(pos, 2i)} = \sin\left(\frac{pos}{10000^{2i/d_{\text{model}}}}\right)
+$$
+
+$$
+PE_{(pos, 2i+1)} = \cos\left(\frac{pos}{10000^{2i/d_{\text{model}}}}\right)
+$$
+
+where:
+
+$pos$: the token position index
+$i$: the dimension index (0 to $d_{\text{model}}/2-1$)
+$d_{\text{model}}$: the model dimension (e.g., 512)
+
+Sine embedding is **parameter-free**: it **requires no training parameters** and is **computationally efficient**. It also has a degree of **extrapolation ability**, generalizing to longer sequences unseen during training.
+
+However, it is **aware of absolute position** and cannot directly model relative distance, and **performance on long sequences degrades**, with positional-encoding differences blurring as distance increases. Sine embedding can in principle compute any position and has some extrapolation ability, but actual long-sequence performance drops noticeably.
+
+**Relative embedding: rotary position embedding (RoPE)**
+
+The core idea is to model the relative distance between tokens rather than absolute position: instead of adding an absolute position vector at the input, it **explicitly introduces relative position information into the attention computation**—specifically, by applying position-dependent rotations to Q and K so that attention logits depend only on the distance between tokens.
+
+Rotary position embedding is a kind of relative embedding.
+
+At present, the vast majority of **advanced models use rotary position embedding**. RoPE was first proposed by Jianlin Su in the 2021 paper *RoFormer: Enhanced Transformer with Rotary Position Embedding*. GPT-J was one of the earliest well-known open-source models to adopt RoPE. Today **RoPE has many algorithms for extending context length**, which are an important part of modern production-grade language models. Even in small-scale, short-context settings, its empirical performance is very significant, and it can be said to have won the positional-embedding competition. Note that the base $\theta$ that determines the scale of the rotation angle (i.e., the RoPE base) **is itself a configurable hyperparameter**; in most models it is set according to a predetermined scheme, but in long-context extension it is adjusted explicitly. Its design intuition is the same as that of sine-cosine embeddings: it needs to cover different frequency ranges to capture both high- and low-frequency information. Rotation is essentially **matrix multiplication**. For an already-trained model, the values of $\theta$ and $m$ are fixed, which amounts to **multiplying a vector by a fixed matrix**.
+
+**What is rotation?**
+
+The concept of rotation is related to complex numbers.
+In two-dimensional space, a vector $\boldsymbol{v}=(x,y)$ can be represented as the complex number $z=x+iy$. Rotating it counterclockwise by an angle $\theta$ is equivalent to multiplying by $e^{i\theta}$. Using the properties of trigonometric functions and complex numbers, this can in turn be transformed into **multiplication by a rotation matrix**.
+
+In **vector space**, rotating a vector clockwise or counterclockwise **by a certain angle** can be achieved by **multiplying the vector by a rotation matrix**:
+
+In **two-dimensional space**, a rotation matrix can be written as:
+
+$$
+R(\theta)=
+\begin{bmatrix}
+\cos(\theta)&-\sin(\theta)\\
+\sin(\theta)&\cos(\theta)
+\end{bmatrix}
+$$
+
+Rotating a vector by an angle $\theta$ is equivalent to multiplying it by a rotation matrix:
+
+$$
+R(\theta)\cdot \boldsymbol{v}
+=
+\begin{pmatrix}
+\cos\theta & -\sin\theta\\
+\sin\theta & \cos\theta
+\end{pmatrix}
+\begin{pmatrix}
+x\\
+y
+\end{pmatrix}
+$$
+
+**A brief aside on the mathematical properties of rotation matrices**
+
+1. **Orthogonality**: a rotation matrix is an orthogonal matrix, meaning its column vectors and row vectors are all unit vectors and are pairwise orthogonal. Therefore, the inverse of a rotation matrix equals its transpose.
+2. **Determinant equal to 1**: the determinant of a rotation matrix is 1, which means the rotation does not change the length of a vector, only its direction.
+3. **Periodicity**: rotation matrices have period $2\pi$, i.e., for any integer $k$, $R(\theta+2\pi k)=R(\theta)$.
+4. **Composition**: multiplication of rotation matrices follows the rules of matrix multiplication, i.e., $R(a+b)=R(a)R(b)$. We will use this property shortly.
+
+What happens when we rotate both the Q and K matrices?
+
+First let us clarify how Q, K, and V are represented. In the Transformer, Q, K, and V are usually matrices for the entire sequence, with each row corresponding to the hidden vector of one token. Suppose the input sequence length is $L$. Then:
+
+$$
+Q,K\in\mathbb{R}^{L\times d_k}
+$$
+
+$$
+V\in\mathbb{R}^{L\times d_v}
+$$
+
+In other words, **uppercase Q, K, and V denote matrices for the entire sequence, each row being the row vector corresponding to one token**.
+
+To make the mathematical derivation convenient, we temporarily consider only two tokens and transpose their Query and Key row vectors into column vectors. We use lowercase $q_m$ and $k_n$:
+
+$$
+q_m,k_n\in\mathbb{R}^{d_k\times 1}
+$$
+
+Here $q_m$ is the Query column vector corresponding to the token at position $m$, and $k_n$ is the Key column vector corresponding to the token at position $n$.
+
+Thus the difference between uppercase and lowercase is: **uppercase Q and K denote matrices for the whole sequence, while lowercase q and k denote the vectors of a single token**. Writing the lowercase vectors as column vectors here is only for convenience of the rotation-matrix derivation; it does not mean that the Q and K matrices actually stored in the Transformer change shape.
+
+Suppose we rotate the Query and Key at positions $m$ and $n$, respectively:
+
+$$
+q_m'=R(m)\cdot q_m
+$$
+
+$$
+k_n'=R(n)\cdot k_n
+$$
+
+Attention computation requires multiplying Q and K:
+
+$$
+\text{Attention}(Q,K,V)
+=
+\text{softmax}\left(
+\frac{QK^T}{\sqrt{d_k}}
+\right)V
+$$
+
+For the two tokens, their attention score after rotation is:
+
+$$
+\begin{aligned}
+q_m'^T k_n'
+&=(R(m)q_m)^T(R(n)k_n)\\
+&=q_m^T R(m)^T R(n)k_n\\
+&=q_m^T R(-m)R(n)k_n\\
+&=q_m^T R(n-m)k_n
+\end{aligned}
+$$
+
+Here we used two properties of rotation matrices introduced earlier:
+
+- The transpose of a rotation matrix equals its inverse, i.e., $R(m)^T=R(-m)$.
+- Multiplying rotation matrices is equivalent to adding their angles, i.e., $R(a)R(b)=R(a+b)$.
+
+Finally, we obtain:
+
+$$
+\boxed{q_m'^T k_n'=q_m^T R(n-m)k_n}
+$$
+
+We multiply tokens at different positions by rotation matrices with different angles. When attention is computed, $R(n-m)$ appears, which introduces the **relative position information** of the two tokens.
+
+Of course, this is only the **two-dimensional** case, and we can extend it to **high-dimensional vectors**. Although rotation in two-dimensional space is intuitive, rotation in high-dimensional space is not obvious.
+
+RoPE's solution is to **partition a high-dimensional vector into multiple two-dimensional sub-blocks** and **perform the rotation independently within each two-dimensional subspace**.
+
+Assume the vector dimension is $d$ and $d$ is even. Then it can be divided into $d/2$ two-dimensional vectors. For a token at position $m$, we can construct a block-diagonal rotation matrix:
+
+$$
+R(m)=
+\begin{bmatrix}
+R_0(m)&0&\cdots&0\\
+0&R_1(m)&\cdots&0\\
+\vdots&\vdots&\ddots&\vdots\\
+0&0&\cdots&R_{\frac d2-1}(m)
+\end{bmatrix}
+$$
+
+where each $2\times2$ sub-block is:
+
+$$
+R_i(m)=
+\begin{bmatrix}
+\cos(m\theta_i)&-\sin(m\theta_i)\\
+\sin(m\theta_i)&\cos(m\theta_i)
+\end{bmatrix}
+$$
+
+Here $m$ is a scalar, usually related to the token's position index; $\theta_i$ is the rotation frequency corresponding to the $i$-th two-dimensional subspace; and $d$ is the dimension of the embedding vector.
+
+Each $2\times2$ sub-block in the matrix corresponds to a pair of dimensions in the embedding vector, and the sub-blocks rotate within their respective two-dimensional subspaces. Different sub-blocks use different rotation frequencies, so different dimension pairs of the same token rotate at different speeds.
+
+The frequency parameter is usually defined as:
+
+$$
+\theta_i=10000^{-\frac{2i}{d}}
+$$
+
+where $i$ is the index of the dimension pair (starting from 0), with range:
+
+$$
+i=0,1,\ldots,\frac d2-1
+$$
+
+and $d$ is the total dimension of the embedding vector.
+
+This high-dimensional embedding method is **simple and efficient**, extending the mathematical properties of two-dimensional rotation to high-dimensional space. **Every pair of dimensions** rotates by its own angle, and therefore at its own speed.
+
+I rotate paired dimensions in the vector. In this way, different dimension pairs jointly encode positional information at different frequencies. As with sine-cosine positional encoding, we choose a set of different $\theta$ values so that some dimension pairs rotate quickly while others rotate more slowly. This captures both high-frequency information (more sensitive to position changes, suitable for expressing fine-grained positional differences at short range) and low-frequency information (suitable for expressing positional relationships over longer distances).
+
+The actual mathematical principle of RoPE is: **simply multiply the vector by sine-cosine rotation matrices of different frequencies**. If you still remember the relevant knowledge from linear algebra and trigonometry, you can regard this as an operation that multiplies the embedding vector by these $2\times2$ block matrices. The rotation operation itself does not require adding an extra position vector; it changes the direction of the vector through matrix multiplication. The relative-position property derived earlier is reflected in the dot product of the rotated Query and Key.
+
+Compared with the original Transformer, which directly adds sine-cosine positional encoding to the input embedding, the difference here is that RoPE acts directly on the Query and Key in the attention layer, rather than simply adding a position embedding at the bottom. Whenever attention is computed, the Query and Key are rotated according to the token positions, thereby introducing positional information into the attention scores.
+
+**Why everyone likes RoPE:**
+
+First, it is **explicitly relative**—**the inner product depends only on relative distance**, which matches the nature of attention. Second, it is **formally unbounded**—a corresponding rotation matrix can be computed for any position, and orthogonal rotations can be multiplied indefinitely. But note that **this does not mean it can actually extrapolate indefinitely**: beyond the training length, unseen positions cause the logits distribution to drift, and extension methods such as position interpolation (PI), NTK-aware scaling, and YaRN are still required. Finally, it is **parameter-free and efficient**, with zero additional parameters and negligible computational overhead.
+
+**A lightweight RoPE variant: P-RoPE (Proportional RoPE)**
+
+Gemma 4, released in 2026, introduced an extremely simple RoPE variant called P-RoPE (Proportional Rotary Position Embedding). Its core change is: **rotate only the first 25% of the dimensions of each attention head**, leaving the remaining dimensions unchanged. For example, when head_dim=512, only the first 128 dimensions participate in rotation.
+
+More notably, Gemma 4 adopts a "dual RoPE" configuration: sliding-window layers use standard RoPE (theta=10,000), while global-attention layers use P-RoPE ($\theta$=1,000,000). The hypothesis behind this is: **high-frequency positional variation can already be fully expressed through a small number of dimensions, while most dimensions can be preserved as pure content representations, reducing the interference of positional signals with the semantic space**. Despite its extreme simplicity, P-RoPE has been validated in Gemma 4, demonstrating a new trend in positional-encoding design from full coverage toward on-demand allocation.
+
+### 3.5 Variants of the Attention Mechanism
+
+When discussing attention mechanisms, one cannot avoid the three pillars Q, K, and V. Multi-head attention splits the input into multiple heads, performs self-attention on each head, and finally merges the results.
+
+In **the traditional attention mechanism**, we allocate **a Q, K, V matrix to each head**, and each head has its **own** Q, K, V matrices.
+For $h_1$, we allocate three **different** matrices $Q_1$, $K_1$, $V_1$; for $h_2$, we similarly allocate three **different** matrices $Q_2$, $K_2$, $V_2$.
+
+**KV cache**
+
+<div align="center">
+  <img src="./images/4-14-KV_cache.png" alt="KV_cache" width="800">
+  <p><em>Figure 17. KV_cache</em></p>
+</div>
+
+When we generate text, remember that we generate one token, the Transformer reads and processes it, and we then obtain the distribution for the next token; we repeat this autoregressively, one token at a time. Doing so prevents us from parallelizing generation—we must proceed step by step for each new token. We store the K and V values computed for the history so that we do not need to recompute them when generating a new token. This is called the KV cache.
+
+**MQA: Multi-Query Attention**
+
+<div align="center">
+  <img src="./images/4-15-MQA.png" alt="MQA" width="800">
+  <p><em>Figure 18. MQA</em></p>
+</div>
+
+Traditional **multi-head attention (MHA)** allocates a Q, K, V matrix to each head, and each head has its own Q, K, V matrices. **Multi-Query Attention (MQA)** optimizes this. Its main improvement is to **share the K and V matrices**, i.e., multiple heads share the same K and V matrices, while the Q matrices are **not shared**. This is also the origin of the name **multi-query attention**. It reduces the GPU memory pressure of storing KV matrices.
+
+**In MQA**, all attention heads share the same key (K) and value (V) matrices. Each attention head keeps only its own query (Q) matrix. This means K and V need to be computed and stored only once, rather than recomputed for each head.
+
+The **query (Q) matrix** remains independent: each head has its own query matrix, so each head can still attend to different features of the input data from different angles. This avoids computing separate K and V matrices for each head, saving memory and compute.
+
+**GQA: Grouped Query Attention**
+
+GQA (Grouped Query Attention) adjusts this slightly: instead of pairing many queries with a single key, it reduces the number of keys by a certain factor. This strikes a balance between inference-time performance and model expressive power, because switching directly from multi-head attention to multi-query attention may be too aggressive.
+
+The **core idea** of GQA is to divide the **queries** into multiple groups, with each group sharing one set of keys and values, rather than each query head independently using its own keys and values. Specifically, in MQA all heads share the key and value matrices while each head has its own query matrix; in GQA, the heads are divided into multiple groups, each group shares one set of key and value matrices, and each head still has its own query matrix.
+
+In other words, GQA considers MQA and MHA too extreme and chooses the middle ground. Through **grouped query attention**, the Qwen series maintains relatively high inference efficiency while reducing redundant KV-cache computation. For example, Qwen2.5-32B's GQA configuration has 40 Q heads and 8 KV heads (8 groups × 5 heads), and its KV cache is about **20%** the size of standard multi-head attention's, saving roughly 80%. This design is especially effective in large-scale language models, **significantly improving inference speed and resource utilization**.
+
+**Why is GQA so effective? An explanation from the perspective of KV-cache arithmetic intensity**
+
+GQA not only saves GPU memory; more importantly, it addresses the **arithmetic-intensity bottleneck** of the autoregressive inference stage.
+
+During autoregressive generation, each step must read all historical Keys and Values from the KV cache for incremental computation. Memory access increases sharply while the amount of computation stays the same, causing **arithmetic intensity to drop substantially**, so the GPU spends most of its time waiting for data movement. Its arithmetic intensity is roughly proportional to:
 
 $$
 \frac{1}{N/D + 1/B}
 $$
 
-where $N$ is sequence length and $D$ is model dimension. The **$N/D$ term** is the culprit behind the drastic efficiency degradation for small models or long sequences.
+where $N$ is the sequence length, $D$ is the model dimension, and $B$ is the batch size. The **$N/D$ term** is what causes inference efficiency to deteriorate sharply for small models or long sequences.
 
-MQA/GQA's core contribution: by having multiple query heads share the same Key/Value set, the $N/D$ term in the arithmetic intensity denominator gets multiplied by the number of heads $H$, becoming $N/(H \cdot D)$. This is equivalent to **using more query heads to "amortize" the cost of memory access**, dramatically improving throughput at the hardware level — far beyond simply "saving memory." This is why GQA can achieve near-MQA inference efficiency with almost no performance loss.
+The core contribution of MQA/GQA is this: by letting multiple query heads share the same set of Keys/Values, the $N/D$ term in the denominator of arithmetic intensity is multiplied by the number of heads $H$, becoming $N/(H \cdot D)$. This effectively **amortizes the cost of memory access across more query heads**, greatly increasing throughput at the hardware level—far more than simply "saving GPU memory." GQA can therefore achieve inference efficiency close to MQA with almost no loss in performance.
 
-#### 4. Sparse / Sliding Window Attention
+**Sparse / sliding-window attention**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-16-sparse&structuredAttention.png" width="800" alt="4-16-sparse&structuredAttention">
+<div align="center">
+  <img src="./images/4-16-sparse&amp;structuredAttention.png" alt="sparse&amp;structuredAttention" width="800">
+  <p><em>Figure 19. sparse&amp;structuredAttention</em></p>
+</div>
 
-Looking back to 2019, OpenAI published an excellent paper exploring how to build models with longer attention spans. Their proposed solution was to **design sparse attention patterns** — not attending to the entire sequence, but focusing on local windows within each block, supplemented by diagonal attention patterns to pass information across blocks. Through such sparse or structured attention, one can balance expressiveness and runtime efficiency.
+Back in 2019, OpenAI published an excellent paper on how to build models with longer attention. Their solution was to **design sparse attention patterns**: instead of attending to the entire sequence, focus on the local window of each block, supplemented by patterns such as diagonals to pass information across blocks. Such sparse or structured attention balances expressive power and runtime efficiency.
 
-GPT-3 adopted such techniques at its initial release to achieve larger attention windows. Sliding window attention is another variant of this idea — at each layer, only attending to the neighborhood of the current position. This effectively controls the total resources needed for processing long texts, with the effective receptive field equal to local range × number of layers. While these are earlier ideas, modern implementations have evolved significantly.
+GPT-3 adopted this kind of technique at its initial release to achieve a larger attention window. Sliding-window attention is another variant of this idea, attending at each layer only to the neighborhood of the current position. This effectively controls the total resources needed to process long texts, with the effective receptive field equal to the local range multiplied by the number of layers. Although these are older ideas, modern implementations have new developments.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-17-slidingWindowsAttention.png" width="800" alt="4-17-slidingWindowsAttention">
+<div align="center">
+  <img src="./images/4-17-slidingWindowsAttention.png" alt="slidingWindowsAttention" width="800">
+  <p><em>Figure 20. slidingWindowsAttention</em></p>
+</div>
 
-Recently, papers from LLaMA 4, Gemma, and Cohere Command A proposed an ingenious scheme: construct groups of **four Transformer blocks**, where the bottom block uses full self-attention but **without any position embeddings** (neither RoPE nor other position encodings) — completely lacking position awareness yet achieving **complete self-attention functionality**. And this only happens once every four blocks. The three blocks above it use sliding window attention with RoPE. This is actually a very clever trick — it controls system-level factors since full attention only occurs occasionally, while also handling length extrapolation since RoPE only processes local context windows. For truly long-range dependencies, no position embedding is needed at all, enabling **very aggressive extrapolation**.
+Models such as **LLaMA 4 and Cohere Command A** adopt a clever alternating scheme: in each group of 4 Transformer blocks, **1 layer uses full global self-attention and contains no positional embedding at all** (NoPE—neither RoPE nor any other positional encoding), while the other **3 layers use local attention with RoPE**.
 
-#### 5. Modern Sliding Window Attention Hybrid Paradigm
+LLaMA 4 calls this **iRoPE**: the RoPE layers use local attention within a block, and the NoPE layers discard rotary embeddings and perform full-context global attention.
 
-Early sliding window attention was typically used as a cheap substitute for global attention. But between 2024–2025, a **global + local alternating hybrid paradigm** rapidly became mainstream:
+Cohere Command A's specific configuration is **3 sliding-window layers (window 4,096) + 1 global-attention layer (no positional embedding)**; the global layer allows tokens to interact without restriction over a 256K context. **Gemma 4 does not belong to this pattern**: its global-attention layers are not NoPE but use **dual RoPE**, with standard RoPE in sliding-window layers and P-RoPE in global layers.
 
-**Cohere Command A** pioneered an alternating pattern with groups of 4 Transformer blocks: 1 layer uses **full global attention** (able to see all historical tokens), while the remaining 3 layers use **sliding window attention** (only attending to local context).
+This is actually a very clever trick: it controls system-level cost because full attention happens only occasionally, and it also handles length extrapolation because RoPE only handles the local context window. For genuinely long-distance dependencies, no positional embedding is needed at all, so **very aggressive extrapolation** is possible.
 
-Cohere Command A's **specific configuration is 3 sliding window layers (window 4,096) + 1 global attention layer. OLMo 2 uses global attention at the 4th layer of every 4-layer group and at the final layer**. Qwen 3.5 alternates Gated DeltaNet (linear attention) with standard attention at roughly a 3:1 ratio — Gated DeltaNet combines Mamba2's gated decay mechanism with the Delta rule.
+**The hybrid paradigm of modern sliding-window attention**
 
-This design has been widely adopted by the latest models such as **LLaMA 4, Gemma 4, OLMo 3**, enabling ultra-long context at controllable computational cost. Further exploration comes from **Qwen 3.5**, which replaces sliding window layers with a **state space model (Gated DeltaNet)** while preserving the "global attention every few layers" alternating structure, thereby fusing linear attention with standard attention.
+Early sliding-window attention was usually a cheap substitute for global attention. But between 2024 and 2025, a **hybrid paradigm alternating global and local attention** rapidly became mainstream:
 
-This paradigm cleverly exploits the hierarchical property of "local information converging upward into global information layer by layer," striking an excellent balance between inference efficiency and long-range dependency modeling.
+**Cohere Command A** pioneered an alternating pattern in groups of 4 Transformer blocks: 1 layer uses **full global attention** (able to see all historical tokens), and the other 3 layers use **sliding-window attention** (focusing only on local context).
 
-#### 6. MLA: DeepSeek's Multi-Head Latent Attention
+**OLMo 3** uses full attention in the **last layer** of every 4 layers, and sliding-window attention with a window of 4096 in the first 3 layers.
 
-MLA (Multi-head Latent Attention) is an innovative attention architecture introduced by DeepSeek, using **low-rank joint compression** to dramatically reduce KV cache requirements during inference while maintaining performance and significantly boosting efficiency.
+Qwen 3.5 alternates Gated DeltaNet (linear attention) with standard attention at a ratio of about 3:1. Gated DeltaNet combines Mamba2's gated decay mechanism with the Delta rule.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-18-MLA.png" width="800" alt="4-18-MLA">
+This design has been widely adopted by the latest models such as **LLaMA 4, Gemma 4, and OLMo 3**, enabling ultra-long contexts at manageable computational cost. A further exploration comes from **Qwen 3.5**, which replaces most standard attention layers with **linear attention (Gated DeltaNet)** but retains the alternating structure of "perform global attention every few layers," thus fusing linear attention with standard attention.
 
-Reducing KV cache by 93% — the DeepSeek-V2 architecture diagram is shown above. MLA ensures efficient inference by dramatically reducing the KV cache needed for generation.
+This paradigm cleverly exploits the hierarchical property that "local information converges upward layer by layer into global information," finding an excellent balance between inference efficiency and long-range dependency modeling.
 
-Traditional Transformer models typically use Multi-Head Attention (MHA), but during generation, the massive Key-Value (KV) cache becomes a bottleneck limiting inference efficiency. To reduce KV cache, Multi-Query Attention (MQA) and Grouped-Query Attention (GQA) were proposed. They require smaller KV caches, but their performance never matches MHA.
+**MLA: DeepSeek's Multi-head Latent Attention**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-19-compareAttentions.png" width="800" alt="4-19-compareAttentions">
+MLA (Multi-head Latent Attention) is an innovative attention architecture introduced by DeepSeek. Through **low-rank joint compression**, it significantly reduces the KV-cache requirement during inference while maintaining performance and greatly improving efficiency.
 
-Traditional Transformers use MHA where each attention head independently caches Key and Value vectors. For a model with $L$ layers, hidden dimension $d$, and $h$ heads, KV cache complexity is $O(L \cdot h \cdot d)$ — the main bottleneck for long-sequence inference.
+<div align="center">
+  <img src="./images/4-18-MLA.png" alt="MLA" width="800">
+  <p><em>Figure 21. MLA</em></p>
+</div>
 
-MLA's core breakthrough is jointly compressing the Keys and Values of **all attention heads** into a shared low-dimensional latent space, rather than compressing each head individually. The specific implementation is:
+Reducing the KV cache by 93%—the DeepSeek-V2 architecture is shown above. MLA ensures efficient inference by significantly reducing the KV cache required for generation.
 
-$$K' = K \cdot W_K^{down}, \quad V' = V \cdot W_V^{down}$$
+Traditional Transformer models usually use multi-head attention (MHA), but during generation their large key-value (KV) cache becomes a bottleneck limiting inference efficiency. To reduce the KV cache, multi-query attention (MQA) and grouped query attention (GQA) were proposed. They require smaller KV caches, but their performance consistently falls short of MHA.
 
-where $W_K^{down}$ and $W_V^{down}$ are down-projection matrices mapping the original high-dimensional KV to a latent space of dimension $r$ (typically $r \ll d$). During inference, only the compressed latent vectors need to be cached, reducing cache complexity to **$O(L \cdot r)$**.
+<div align="center">
+  <img src="./images/4-19-compareAttentions.png" alt="compareAttentions" width="800">
+  <p><em>Figure 22. compareAttentions</em></p>
+</div>
 
-**MLA's main steps**:
+The traditional Transformer uses multi-head attention (MHA), where each attention head must cache Key and Value vectors independently. For a model with $N$ layers and hidden dimension $d$, each token requires caching $2d$ elements per layer, for a total KV cache of $O(N\cdot d)$—the main bottleneck of long-sequence inference.
 
-**Input mapped to latent space**: Given input (where n is sequence length, d is feature dimension), project it into latent space via mapping function f. This dramatically reduces memory footprint when storing KV.
+MLA's core breakthrough is to jointly compress the Keys and Values of all attention heads into a shared low-dimensional latent space, rather than compressing each head separately. The implementation is:
+
+$$c_t^{KV} = h_t \, W^{DKV}, \qquad k_t^C = c_t^{KV} W^{UK}, \qquad v_t^C = c_t^{KV} W^{UV}$$
+
+Here $W^{DKV}$ down-projects the hidden state $h_t$ into a **joint** latent space of dimension $r$ (usually $r \ll d$), and $W^{UK}$ and $W^{UV}$ then up-project it into the K and V of each head. The key point is that **K and V share the same latent**, rather than being compressed separately. At inference, only $c_t^{KV}$ needs to be cached, reducing the per-token cache to $r$ dimensions, or $O(N\cdot r)$ across $N$ layers.
+
+As can be seen in the middle of the figure, **MLA is an important component of the DeepSeek model**. It **extends the traditional multi-head attention mechanism** by introducing **latent representations** to enhance the model's expressive power. MLA is essentially a **lossy compression of the KV (Key-Value, a caching mechanism)** to improve storage efficiency.
+
+**The main steps of MLA are as follows**:
+
+**Map the input into the latent space**: given an input $x\in\mathbb{R}^{L\times d}$ ($L$ is the sequence length and $d$ is the feature dimension), first use a down-projection to obtain **one** joint latent vector, rather than compressing K and V separately:
 
 $$
-c_K = x \cdot W_K^{down} \in \mathbb{R}^{L \times r}
+c^{KV} = x\,W^{DKV} \in \mathbb{R}^{L\times r}
 $$
 
-$$
-c_V = x \cdot W_V^{down} \in \mathbb{R}^{L \times r}
-$$
-
-**Before attention computation, up-project the cached compressed KV back to the original space:**
+**Before attention computation, up-project the latent vector back into the K and V of each head:**
 
 $$
-K = c_K \cdot W_K^{up} \in \mathbb{R}^{L \times (h \cdot d_h)}
+K = c^{KV}W^{UK} \in \mathbb{R}^{L\times (h\cdot d_h)},\qquad
+V = c^{KV}W^{UV} \in \mathbb{R}^{L\times (h\cdot d_h)}
 $$
 
-$$
-V = c_V \cdot W_V^{up} \in \mathbb{R}^{L \times (h \cdot d_h)}
-$$
+In addition, MLA keeps a separate, decoupled RoPE branch for positional information: $k^R = \mathrm{RoPE}(xW^{KR})$. This branch **does not enter the latent**, because RoPE would break the inference-time matrix fusion that "absorbs $W^{UK}$ into $W^{UQ}$." At inference, each token per layer needs to cache only $c^{KV}$ ($r$ dimensions) and $k^R$ ($d_h^R$ dimensions), which is precisely where the 93% KV-cache reduction comes from.
 
-Some might argue: this reduces KV cache memory but clearly increases computation — every attention computation requires decompression, and after computation, recompression. Indeed, there's no perfect solution; we must weigh trade-offs. Clearly, memory is far more precious than time, and the added computation is within expectations. Compared to the memory saved, memory is clearly more important.
+Some will say: this reduces the GPU memory occupied by the KV cache, but the computation clearly increases, since every attention computation requires decompression and then compression afterward. That is indeed true, but nothing in the world is perfect; we must weigh the pros and cons. GPU memory is clearly more precious than time, and the added computation is within expectations. Compared with the memory that can be saved, memory is clearly more important.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-20-MLA_exp.png" width="800" alt="4-20-MLA_exp">
+<div align="center">
+  <img src="./images/4-20-MLA_exp.png" alt="MLA_exp" width="800">
+  <p><em>Figure 23. MLA_exp</em></p>
+</div>
 
-Comparison of MLA and MHA on difficult benchmarks. DeepSeek-V2 (using MLA) outperforms MHA while requiring significantly less KV cache. Although MLA is not widely used — only in the DeepSeek series — DeepSeek's outstanding model performance has already demonstrated this technology's capability.
+Comparison of MLA and MHA on difficult benchmarks. DeepSeek-V2 (using MLA) outperforms MHA while requiring a significantly smaller KV cache. MLA was proposed by DeepSeek and has since been adopted by models such as Kimi K2; it substantially compresses the KV cache while maintaining performance superior to MHA, proving the value of this technique.
 
-#### 7. DSA (DeepSeek Sparse Attention)
+**DSA: DeepSeek Sparse Attention**
 
-DeepSeek Sparse Attention (DSA) is a fine-grained dynamic sparse attention mechanism introduced in DeepSeek-V3.2-Exp, and the first technique named after DeepSeek. By intelligently filtering key information, it reduces long-context inference cost by 60–70% with almost no quality loss.
+DeepSeek Sparse Attention (DSA) is the fine-grained dynamic sparse attention mechanism introduced by DeepSeek-V3.2-Exp. By intelligently filtering key information, it substantially reduces the cost of long-context inference while causing almost no loss in model quality (the exact wording in DeepSeek's official V3.2-Exp release announcement was "API prices cut by 50%+", i.e., API prices fell by more than 50%).
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-21-DSA_exp.png" width="800" alt="4-21-DSA_exp">
+<div align="center">
+  <img src="./images/4-21-DSA_exp.png" alt="DSA_exp" width="800">
+  <p><em>Figure 24. DSA_exp</em></p>
+</div>
 
-According to the paper published by DeepSeek (which won the ACL 2025 Best Paper award), NSA slightly outperforms full attention in scores while thoroughly dominating in speed. For 64k-length sequence processing, NSA achieves significant computational acceleration across all phases of full attention (decoding, forward propagation, and backward propagation).
+According to the technical report released by DeepSeek, after V3.2 added DSA on top of the MLA it inherited from V3.1, it is clearly better in both cost and speed in long-context settings.
 
-##### Reviewing Previous Attention Mechanisms
+**Reviewing previous attention mechanisms**
 
-Previous attention mechanisms all followed a fully-connected paradigm — each Query token must compute attention with **all historical tokens**. The problem is that for model inference, truly critical tokens are actually very few; most tokens are irrelevant. Just like in a sentence, not every character is key — there are many filler words and particles.
+Previous attention mechanisms all followed a fully connected paradigm, in which every query token computes attention with **all historical tokens**. The problem is that very few tokens are actually critical for model inference; most tokens are irrelevant. Just as not every character in a sentence is key—there are also many fillers and particles.
 
-##### DSA Core Principle
+**The core principle of DSA**
 
-DSA optimizes this scenario through **"filter first, compute later"** — scan historical tokens, compute importance scores, and only tokens with sufficiently high scores enter attention computation. The core architecture consists of two components: the Lightning Indexer and the Top-k Selector.
+DSA optimizes this setting through **filter first, compute later**: it scans historical tokens and computes importance scores, and only those with sufficiently high scores enter the attention computation. The core architecture consists of two components: a Lightning Indexer and a Top-k selector.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-22-DSA.png" width="800" alt="4-22-DSA">
+<div align="center">
+  <img src="./images/4-22-DSA.png" alt="DSA" width="800">
+  <p><em>Figure 25. DSA</em></p>
+</div>
 
-**1. Lightning Indexer**:
+1. **Lightning Indexer**:
 
-For each Query token, rapidly scans historical tokens and computes "importance proxy scores." It is a lightweight network using far fewer attention heads than the main model, running at FP8 low precision, quickly scanning all historical tokens and computing scores.
+For each query token, it quickly scans historical tokens and computes an "importance proxy score." It is a lightweight network that uses far fewer attention heads than the main model and runs at low FP8 precision to rapidly scan all historical tokens and compute scores.
 
-**2. Fine-grained Top-k Selection**
+2. **Fine-grained Top-k selection**
 
-Based on index scores, dynamically constructs a dedicated Top-k set for each Query, with k typically = 2048, independent of sequence length L, forcibly reducing complexity to $O(L \cdot k)$, compared to traditional attention's $O(L^2)$.
+Based on the index scores, it dynamically constructs a dedicated Top-k set for each query. Typically $k=2048$, independent of the sequence length $L$; the complexity is forced down to $O(L\cdot k)$, compared with $O(L^2)$ for traditional attention.
 
-Most impressively, DSA is a flexible plug-in — models not originally trained with DSA can adopt it through simple training.
+Most valuable of all, DSA is a flexibly usable plug-in: with a small amount of training, models that were not trained with DSA can also use it.
 
-#### 8. CSA and HCA Mixed Attention Architecture in DeepSeek V4
+**The CSA and HCA hybrid attention architecture in DeepSeek V4**
 
-**CSA stands for Compressed Sparse Attention, and HCA stands for Heavily Compressed Attention**.
+**CSA stands for Compressed Sparse Attention, and HCA stands for Heavily Compressed Attention.**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-32-Deepseekv4的评测和资源占用.png" width="800" alt="4-32-Deepseekv4的评测和资源占用">
+<div align="center">
+  <img src="./images/4-32-DeepSeek-V4-benchmarks-and-resource-usage.png" alt="DeepSeek V4 benchmarks and resource usage" width="800">
+  <p><em>Figure 26. DeepSeek V4 evaluation and resource usage</em></p>
+</div>
 
-From the figure above, we can see that DeepSeek-V4-Pro's performance basically matches top-tier closed-source models, yet with ~1.6T parameters, DeepSeek V4 Pro's KV cache and per-token compute are far lower than DeepSeek V3.2. Part of this is the structural advantage of the MoE architecture itself, but a major improvement in V4 Pro is the optimization of the attention architecture. DeepSeek V4 utilizes a CSA and HCA hybrid alternating architecture to reduce KV Cache and computation.
+From the figure above, we can see that DeepSeek-V4-Pro's performance is essentially on par with top closed-source models, yet the KV cache and per-token compute of the roughly 1.6T-parameter DeepSeek V4 Pro are much lower than those of DeepSeek V3.2. One reason is the structural advantage of the MoE architecture itself; another is a major improvement in V4 Pro—the optimization of the attention architecture. DeepSeek V4 uses a hybrid alternating architecture of CSA and HCA to reduce KV cache and computation.
 
-The CSA and HCA hybrid attention architecture is based on MQA design. The core logic is using the alternating structure of CSA and HCA for **division of labor** — CSA preserves the ability to process fine-grained information, HCA achieves extremely low-cost global long-term memory, combined with sliding windows to capture the most immediate local information.
+The CSA and HCA hybrid attention architecture is based on MQA. Its core logic is to use the alternating structure of CSA and HCA for **division of labor**: CSA preserves the ability to handle fine-grained information, HCA provides extremely low-cost global long-term memory, and sliding-window attention captures the most transient local information.
 
 ---
 
-##### I. CSA: Balancing Compression and Sparsity
+**1. CSA: the balance between compression and sparsity**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-33-CSA的结构.png" width="800" alt="4-33-CSA的结构">
+<div align="center">
+  <img src="./images/4-33-CSA-structure.png" alt="CSA structure" width="800">
+  <p><em>Figure 27. The structure of CSA</em></p>
+</div>
 
-CSA's design philosophy is to dramatically reduce computation while preserving high-resolution attention to key details. It proceeds in two steps: **compress first, then sparsely select**.
+CSA's design philosophy is to greatly reduce computation while preserving high-resolution attention to key details. It proceeds in two steps: **compress first, then select sparsely**.
 
-**1. KV Cache Compression**
+**1. KV-cache compression**
 
-This avoids directly processing massive raw KV caches. It compresses the KV cache of every **m** tokens into one entry — a block-level representation.
+This avoids directly processing the massive raw KV cache. It compresses the KV cache of every **m** tokens into one entry, i.e., a block-level representation.
 
-Not simple average pooling, but through a **learnable weighted compression** mechanism. The model computes a compression weight for each token, then sums the KV pairs of these m tokens by weight, fusing them into one compressed entry. During compression, adjacent compressed blocks share some tokens. This smooths boundary information, preventing information fragmentation from hard partitioning. This reduces KV cache规模 to **1/m** of the original. In V4, `m` is set to **4**. A small set of sliding window KV entries is also introduced to enhance local fine-grained dependencies.
+This is not simple average pooling but a **learnable weighted compression** mechanism. The model computes a compression weight for each token, then sums the KV pairs of these m tokens according to their weights and fuses them into one compressed entry. During compression, two adjacent compressed blocks share some tokens. This smooths boundary information and prevents information discontinuity caused by hard splitting. The KV cache is thereby reduced to **1/m** of its original size. In V4, `m` is **4**. At the same time, a small set of sliding-window KV entries is introduced to strengthen local fine-grained dependencies.
 
-**2. DSA Takes the Stage**
+**2. DSA enters**
 
-After compression, if dense attention were computed over all blocks, complexity would still be quadratic. CSA then uses sparse attention to select only the most relevant blocks.
+After compression, dense attention over all blocks would still have quadratic complexity. CSA therefore applies sparse attention to select only the most relevant blocks.
 
-First, the **Lightning Indexer** rapidly computes relevance scores between the current query token and all compressed KV blocks. Based on index scores, only the top-k highest-scoring compressed KV blocks are retained for the current query token. Core attention computation drops from **$O$(sequence length)** to **$O(k)$**, decoupled from sequence length. In V4, k=**512** for Flash, k=**1024** for Pro.
+It first uses the **Lightning Indexer** to quickly compute relevance scores between the current query token and all compressed KV blocks. Based on the index scores, it keeps only the k compressed KV blocks with the highest scores for the current query token. The core attention computation drops from **O(sequence length)** to **O(k)**, decoupled from sequence length. In V4, **k=512** for Flash and **k=1024** for Pro.
 
-*CSA layer execution flow: first apply learnable weighted compression to KV cache, then use Lightning Indexer at low precision to select the most relevant Top-k blocks, and finally compute core attention only on the sparsely selected blocks.*
-
----
-
-##### II. HCA: Extreme Compression for Global Context
-
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-33-HCA的结构.png" width="800" alt="4-33-HCA的结构">
-
-HCA's goal is to maintain a global contextual view covering hundreds of thousands of tokens at extremely low cost. It only does compression, no sparse selection.
-
-HCA is similar to CSA, but the compression ratio m is much larger than CSA's — local information from many tokens is fused. Because compression is aggressive enough, sequence length becomes extremely short. So HCA can perform **dense attention** on this very short sequence, allowing every token to see the entire global context without loss. Since the sequence is short, computational cost is fully controllable.
+*The CSA layer execution flow: first perform learnable weighted compression on the KV cache, then use the Lightning Indexer at low precision to select the most relevant Top-k blocks, and finally perform the core attention computation only on the sparsely selected blocks.*
 
 ---
 
-## 4.3 Hyperparameter Considerations and Design Principles
+**2. HCA: the global background at extreme compression**
 
-When you're suddenly asked to train a new language model, you'll have many questions about hyperparameters, because there are quite a few. A key point you should realize: across different successful models, only a handful of hyperparameters are actually tuned. The field follows fairly clear empirical rules and guiding principles. For instance, how much should the feed-forward network size be expanded? How should the number of attention heads be set? What vocabulary size is appropriate? How much larger should the FFN size be than the hidden size? How many heads, and should num_heads always divide the hidden size evenly? How do people scale these models — deeper or wider?
+<div align="center">
+  <img src="./images/4-33-HCA-structure.png" alt="HCA structure" width="800">
+  <p><em>Figure 28. The structure of HCA</em></p>
+</div>
 
-This chapter will answer all these questions!
+HCA's goal is to maintain a global background view covering hundreds of thousands of tokens at extremely low cost. It performs compression only, with no sparse selection.
 
-### 4.3.1 Feed-Forward Network
+HCA is actually similar to CSA, but its compression ratio m is much larger than CSA's, and the local information of many tokens is fused. Because compression is aggressive enough, the sequence length becomes extremely short. HCA can therefore perform **dense attention** over this extremely short sequence, allowing every token to see the entire global background without loss. Because the sequence is short, the computational cost is fully manageable.
 
-Let's start with a simple feed-forward layer. Assume this is the ReLU version with bias(b):
+## 4 Hyperparameter Considerations and Design Principles
+
+When you are suddenly asked to train a new language model, you will have many questions about hyperparameters, because there are quite a lot of them. One key point you should realize is that, across successful models, only a few hyperparameters are actually tuned. The industry follows fairly clear rules of thumb and guiding principles. For example: by how much should the feed-forward network size be expanded? How should the number of attention heads be set? What vocabulary size is appropriate? How much larger should the FFN size be than the hidden size? How many heads should there be, and should `num_heads` always divide the hidden size? How do people scale these models—do they make them deeper or wider?
+All these questions will be answered in this chapter!
+
+### 4.1 Feed-Forward Networks
+
+Let us start with the simple feed-forward layer. Assume it is the ReLU version with bias (b):
 
 $$ 
 FFN(x) = max(0,xW_1 + b_1)W_2 + b_2
 $$
 
-This involves two hyperparameters: $d_{model}$ (the dimension of input x, i.e., FFN input dimension) and $d_{ff}$ (feed-forward network dimension, i.e., FFN hidden layer output dimension), which ultimately projects back to $d_{model}$ dimension. When you plan to scale up the model, the FFN typically scales up too. The specific multiplier is actually a long-standing consensus in the field: nearly all researchers using ReLU-type MLPs set $d_{ff}$ to 4× $d_{model}$.
+Two hyperparameters are involved here: $d_{model}$ (the dimension of the input $x$, i.e., the FFN input dimension) and $d_{ff}$ (the feed-forward network dimension, i.e., the hidden-layer output dimension of the FFN), which is finally projected back to $d_{model}$. When you plan to scale up the model, the FFN usually scales up too. How much to expand it by is actually a long-established consensus in the industry: almost all researchers using ReLU-type MLPs set $d_{ff}$ to 4 times $d_{model}$.
 
 $$
 d_{ff} = 4d_{model}
 $$
 
-This is a **validated convention**, though it's **not 100% universally correct** — there are some exceptions:
+This is a **validated convention**, but it is **not 100% correct**; there are some exceptions:
 
-#### Exception 1: GLU Variants Adjust the Expansion Factor to 2/3
+**Exception 1: GLU variants change the expansion factor to 8/3 (i.e., 2/3 of 4)**
 
-Through simple calculation, for GLU variants, $d_{ff}$ should be set to $(8/3) d_{model}$.
+A simple calculation shows that GLU variants usually set $d_{ff}$ to (8/3) $d_{model}$ so as to keep the parameter count close to that of a non-gated version after introducing the gating branch.
 
 $$
 d_{ff}  = (8/3) d_{model}
 $$
 
-Observing existing models, many follow this empirical rule — **(8/3) ≈ 2.66**.
+Looking at existing models, many follow this rule of thumb; **(8/3) is approximately 2.66**.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-23-d_ff&d_model.png" width="800" alt="4-23-d_ff&d_model">
+<div align="center">
+  <img src="./images/4-23-d_ff&amp;d_model.png" alt="d_ff&amp;d_model" width="800">
+  <p><em>Figure 29. d_ff&amp;d_model</em></p>
+</div>
 
-Taking PaLM as an example, Mistral and LLaMA's settings are slightly larger. Although they are all GLU models, **they don't follow the 2.6× rule**. But LLaMA-1, Qwen, DeepSeek, Yi, and T5 all roughly follow the ~2.6× setting.
+Take PaLM as an example: its GLU model likewise **does not follow the 2.6× rule**, but directly adopts a **4×** FFN dimension (d_model=18,432, d_ff=73,728). Mistral 7B's ratio is about **3.5** and LLaMA-7B's is about **2.68**, neither strictly matching 8/3. Meanwhile, models such as **LLaMA-1, DeepSeek, Yi, and T5 v1.1** roughly follow the ~2.6× setting.
 
-#### Exception 2: T5 Model
+**Exception 2: the T5 model**
 
-To some extent, LLM training is like a hyperparameter replication game, causing the field to develop conservatively. But the T5 model demonstrated remarkable boldness — the Google team indeed made some quite daring attempts. In the 11B parameter T5 model, they adopted an astonishing configuration with hidden dimension set to just 1024. But their $d_{ff}$ (feed-forward network dimension) and its upward projection dimension was 65536, making the **ratio of $d_{ff}$ to $d_{model}$ reach 64×**. Of course, by comparison, PaLM's ratio factor is about 4, while other models are much smaller. This is a very large difference. There are some other recent examples using larger multipliers, like Gemma 2 following with an 8× factor.
+To some extent, large language model training is like a hyperparameter replication game, which has made the field's development conservative. But the T5 model showed extraordinary boldness; the Google team did make some quite daring attempts. In the 11-billion-parameter T5 model, they adopted an astonishing configuration with a hidden dimension of only 1024. But their $d_{ff}$ (feed-forward network dimension) and its up-projection dimension are 65536, which makes the **ratio of $d_{ff}$ to $d_{model}$ reach 64×**. By comparison, PaLM's ratio is about 4, and other models are much smaller. This is a very large difference. Recently there have been other examples using larger multipliers, such as Gemma 2 27B, which followed with an 8× factor (the 9B version still uses 4×).
 
-We should ask: has anyone proven this is justified through more quantitative experiments? In Jared Kaplan's scaling laws paper, although most people focus on the scaling law portion, the paper actually contains very useful hyperparameter studies. They specifically studied the $d_{ff}$ to $d_{model}$ ratio mentioned here and plotted how the loss value grows as this ratio changes. **The figure shows an optimal interval exists** — ratios from 1 to around 10 all have a relatively wide selection range; you can freely choose the feed-forward network ratio and results will be near-optimal.
+We should consider: has anyone demonstrated through more quantitative experiments that this is justified? In Jared Kaplan's scaling-laws paper [*Scaling Laws for Neural Language Models*](https://arxiv.org/abs/2001.08361), although most people focus on the scaling-law part, the paper also contains a very useful hyperparameter study. They studied exactly the $d_{ff}$ to $d_{model}$ ratio mentioned here and plotted the loss growth curve as this ratio varies. **The figure shows an optimal region**: the ratio has a fairly wide selection range from about 1 to 10, and you can choose the feed-forward ratio arbitrarily with results close to optimal.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-24-FeedFowardRatio.png" width="800" alt="4-24-FeedFowardRatio">
+<div align="center">
+  <img src="./images/4-24-FeedFowardRatio.png" alt="FeedFowardRatio" width="800">
+  <p><em>Figure 30. FeedFowardRatio</em></p>
+</div>
 
-**What can we learn from these hyperparameter studies?** Extensive evidence shows: if not using GLU activation, you can default to a **4× multiplier**; if using GLU, approximately 2.66× can be used. These settings **work well for most modern language models**. However, T5 once again proves **you don't have to follow these rules** — you can break conventions and freely choose, because no hyperparameter is an iron law; reasonable language models can be obtained under other hyperparameter configurations. Interestingly, this story has an intriguing follow-up: T5's improved version T5v1.1 adopted the more standard 2.5× GeGLU multiplier. This perhaps suggests the original team reassessed and believed they should dial back the 64× multiplier and choose a more conventional configuration, ultimately indeed obtaining a better model.
+**What can we learn from these hyperparameter studies?** There is a large body of evidence showing that if you do not use a GLU activation function, you can choose a **4× multiplier** by default; if you use GLU, you can use about 2.66×. These settings **work well for most modern language models**. However, T5 once again proves that **you need not be bound by these rules**; you can break convention and choose freely, because no hyperparameter is an iron law, and a reasonable language model can also be obtained with other hyperparameter configurations. Interestingly, the story has a thought-provoking sequel: T5's improved version, T5 v1.1, adopted a more standard 2.5× GeGLU multiplier. This may suggest that the original team, after re-evaluation, decided to abandon the original 64× multiplier and choose a more conventional configuration, and ultimately did obtain a better model.
 
-On the relationship between ratio and model efficiency: this ratio essentially controls the width of the MLP (FFN) hidden layer. The T5 paper's original rationale for choosing 64× was that maximizing this dimension enables larger matrix multiplications. While theoretically increasing width brings more parallel computation rather than serial computation, this actually represents a suboptimal allocation of parameters and computation at the cost of expressiveness — though when matrices are sufficiently wide, system performance gains may also be obtained.
+On the relationship between the ratio and model efficiency: this ratio essentially controls the width of the MLP (FFN) hidden layer. The reason T5 chose 64× was that maximizing this dimension enables larger matrix multiplications. Although increasing width can in theory bring more parallel rather than serial computation, this is actually a suboptimal allocation of parameters and computation at the expense of expressive power, though when matrices are wide enough it may also yield system-level performance gains.
 
-### 4.3.2 Attention Heads and Model Dimension Ratio
+### 4.2 Ratio of Attention Heads to Model Dimension
 
-Another hyperparameter consensus is the ratio of model dimension to head dimension times number of heads. The standard approach is to keep per-head dimension fixed while increasing head count; alternatively, one could keep single-head dimension unchanged to increase the parameter count of the attention portion — but most models follow the former approach. Looking at GPT-3, T5, LaMDA, PaLM, and LLaMA 2, their **ratios are all 1 or nearly exactly 1**: $(NumHeads \cdot HeadDim) / ModelDim = 1$. T5 is the sole exception breaking this rule, trying a ratio as large as 16. But aside from that, **all other models quite closely follow this consensus.**
+Another hyperparameter consensus concerns the ratio of model dimension to head dimension multiplied by the number of heads. The standard practice is to keep the dimension per head fixed and increase the number of heads. One could of course instead keep the per-head dimension fixed to increase the parameter count of the attention part—but most models follow the former scheme. We see that for GPT-3 and LLaMA 2, $(NumHeads \cdot HeadDim)/ModelDim$ is exactly 1, while LaMDA's is 2; PaLM's attention inner dimension (48 heads × 256 dims = 12,288) is also clearly smaller than its model dimension of 18,432. T5 is a more extreme exception: T5-11B uses 128 attention heads with 128 dimensions each, so $(128\times128)/1024=16$, i.e., a ratio of about 16×. Apart from that, **most other models roughly follow the consensus that the attention inner dimension stays in the same order of magnitude as the model dimension.**
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-25-NumHeadRatio.png" width="800" alt="4-25-NumHeadRatio">
+<div align="center">
+  <img src="./images/4-25-NumHeadRatio.png" alt="NumHeadRatio" width="800">
+  <p><em>Figure 31. NumHeadRatio</em></p>
+</div>
 
-Bhojanapalli et al.'s 2020 study proposed that as the number of attention heads continuously increases, their rank becomes progressively lower. If per-head dimension is very small, it begins to affect the expressive power of the attention operation. But in practice, we don't seem to encounter many significant low-rank bottleneck issues. Most models adopting the 1:1 ratio perform very well.
+In their 2020 study [*Low-Rank Bottleneck in Multi-head Attention Models*](https://proceedings.mlr.press/v119/bhojanapalli20a.html), Bhojanapalli et al. proposed that as the number of attention heads increases, the rank becomes progressively lower. If the dimension of each head is very small, this starts to affect the expressive power of the attention operation. In practice, however, we do not seem to encounter many significant low-rank bottlenecks. Most models using a 1:1 ratio perform very well.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-26-Parameters.png" width="800" alt="4-26-Parameters">
+<div align="center">
+  <img src="./images/4-26-Parameters.png" alt="Parameters" width="800">
+  <p><em>Figure 32. Parameters</em></p>
+</div>
 
-### 4.3.3 Model Width-Depth Ratio
+### 4.3 Width-to-Depth Ratio
 
-Should our model be **deeper or wider**? How deep and how wide?
+Should our model be **deep or wide**? How deep and how wide?
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-27-wide&deep.png" width="800" alt="4-27-wide&deep">
+<div align="center">
+  <img src="./images/4-27-wide&amp;deep.png" alt="wide&amp;deep" width="800">
+  <p><em>Figure 33. wide&amp;deep</em></p>
+</div>
 
-A widely applicable optimal criterion exists: each layer needs **approximately 128 hidden dimensions**. This standard is followed by many GPT-3 and LLaMA variant models.
+A widely accepted rule of thumb is that each layer needs **about 128 hidden dimensions**. This standard is followed by many GPT-3 and LLaMA variant models.
 
-The width-depth ratio consideration is very important — it controls the degree of parallelism we can achieve. If using pipeline parallelism, different layers are typically partitioned and assigned to different devices or device blocks, since each layer is also internally parallelized. This imposes specific constraints on the model. For particularly wide models, tensor parallelism can be used, distributing matrix slices across multiple GPUs. As we'll learn in subsequent chapters, different parallelism paradigms produce different constraints. Tensor parallelism requires very high-speed networks, while pipeline parallelism has somewhat lower requirements on network speed or latency. Therefore, network constraints may in turn influence width-depth decisions.
+The width-to-depth ratio matters a great deal because it controls the degree of parallelism we can achieve. With pipeline parallelism, different layers are usually cut and assigned to different devices or device groups, because each layer is also parallelized internally. This imposes specific constraints on the model. For especially wide models, tensor parallelism can be used, slicing matrices and distributing the slices across multiple GPUs. As we will learn in later chapters, different parallelism paradigms impose different constraints. Tensor parallelism requires a very high-speed network, while pipeline parallelism has somewhat lower requirements on network speed or latency. Network constraints may therefore feed back into the width-depth decision.
 
-Setting aside these constraints, we can think abstractly: how does the width-depth ratio affect model performance? Kaplan et al. again provide excellent visualization. This shows three different data scales — 50M, 274M, and 1.5B parameters. The horizontal axis is the width-depth ratio, and the vertical axis is the percentage change in loss difference. We can see that **around 100, a minimum appears across different scales**.
+Setting these constraints aside, we can think abstractly: how does the width-to-depth ratio affect model performance? Kaplan et al. again provide a good visualization. Here are three data sizes—50 million, 274 million, and 1.5 billion parameters. The horizontal axis is the width-to-depth ratio, and the vertical axis is the percentage change in loss. We can see that the minimum of all three curves lies in the **tens-to-about-one-hundred range** (roughly 30–100), and within this range models of different sizes are all close to their lowest loss.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-28-wide&deep_exp.png" width="800" alt="4-28-wide&deep_exp">
+<div align="center">
+  <img src="./images/4-28-wide&amp;deep_exp.png" alt="wide&amp;deep_exp" width="800">
+  <p><em>Figure 34. wide&amp;deep_exp</em></p>
+</div>
 
-Google's ETay et al. have a very interesting study exploring the impact of depth versus width on upstream and downstream tasks. They found: if only looking at loss values, depth doesn't matter — parameter count is the sole critical factor. But when downstream accuracy is the evaluation metric, the picture becomes less clear. At the time, they were studying fine-tuned SuperGLUE accuracy. They believed that at the same computational cost (FLOPs), deeper models might perform better. There hasn't been much follow-up work on this. But from the perspective of aspect ratio, downstream task performance may indeed differ slightly.
+Tay et al. at Google have a very interesting study, [*Scale Efficiently: Insights from Pre-training and Fine-tuning Transformers*](https://arxiv.org/abs/2109.10686). They trained a large number of Transformers with different depth and width configurations and compared the effects of model structure on pretraining and downstream fine-tuning performance. The study found that if pretraining loss alone is used as the evaluation metric, model performance is mainly affected by parameter scale and is relatively insensitive to structural differences such as network depth and width; but on the downstream SuperGLUE tasks, the influence of model structure increases noticeably—even with similar parameter counts, different depth configurations may achieve different fine-tuning results. Furthermore, the authors compared different scaling approaches, including increasing hidden dimension, FFN width, number of attention heads, and number of layers, and found that increasing depth is generally more beneficial than simply increasing FFN width for improving computational efficiency on downstream tasks. Based on this observation, they proposed the DeepNarrow strategy: prioritize increasing the number of Transformer layers rather than blindly expanding model width.
 
-**Invisible Constraints of System Parallelism Strategies on Width-Depth Ratio**
+This study shows that there is no optimal depth-to-width ratio that can be determined independently of the task and compute budget: models with similar pretraining loss may still differ in downstream transferability. Therefore, when discussing Transformer structural design, downstream task performance and computational efficiency should also be included in the evaluation, beyond parameter scale and pretraining loss.
 
-Beyond the optimal basin region in the loss function, the choice of width-depth ratio is also deeply influenced by **parallelism strategies** in invisible ways. Specifically:
 
-**Deeper models** require partitioning across more layers, which typically forces the architecture to adopt **Pipeline Parallelism**. Pipeline parallelism has explicit "bubbles" and complex scheduling problems — challenges that system engineers **strongly prefer to avoid**. **Wider models** more easily use **Tensor Parallelism**, simply sharding a single large matrix multiplication across multiple GPUs, with more regular communication patterns and simpler implementation.
+**The hidden constraints of system parallelism on the width-to-depth ratio**
 
-Therefore, the industry generally tends to moderately control depth while maintaining a certain width — in a sense, "trading system simplicity for training feasibility." This explains why actual large models rarely exhibit extremely deep or extremely wide designs, but mostly stabilize around a width-depth ratio of ~100 — this is the **optimal compromise point among expressiveness, computational efficiency, and system engineering complexity**.
+Beyond the optimal basin of the loss function, the choice of width-to-depth ratio is also deeply governed by **parallelism strategy**. Specifically:
 
-### 4.3.4 Vocabulary Size
+**Deeper models** need to be split across more layers, which usually forces the architecture to use **pipeline parallelism**. Pipeline parallelism has explicit "bubbles" and complex scheduling problems, and is a **problem that systems engineers dread**. **Wider models** can more easily use **tensor parallelism**, which simply shards the multiplication of a single large matrix across multiple GPUs; the communication pattern is more regular and the implementation simpler.
 
-Overall, vocabulary size shows a continuously **expanding** trend. We believe this is largely because LLMs are being deployed in real production environments, gradually becoming more useful services. When this happens, models need to interact with people using different languages, process emoji and various near-modal or unexpected language forms. Early models (especially monolingual ones) typically had vocabularies in the **30K to 50K** token range, such as early GPT and LLaMA series.
+As a result, the industry generally prefers to moderately control depth and maintain a certain width—in a sense, "trading system simplicity for training feasibility." This explains why real large models rarely have extremely deep or extremely wide designs and mostly stabilize at a width-to-depth ratio in the tens-to-about-one-hundred range, which is precisely **the best compromise among expressive power, computational efficiency, and system engineering complexity**.
 
-But observing multilingual models or what I call production-system models, their vocabularies have all expanded to the **100K to 250K** range. Taking Cohere's Command model — which emphasizes multilingual processing — as an example, its vocabulary is very large. Even GPT-4 and its subsequent models using the GPT-4 tokenizer have vocabularies around 100K tokens. Therefore, **100K to 200K vocabulary has become the industry mainstream standard**. Research shows that as model scale increases, models can to some degree handle more vocabulary elements and effectively utilize them. Thus, as model scale expands or training data increases, vocabulary size shows a continuously growing trend.
+### 4.4 Vocabulary Size
 
-#### Q: Does a multilingual vocabulary help improve monolingual performance?
+Overall, vocabulary size shows a trend of continuous **expansion**. We believe this is largely because large language models are being deployed in practice and are gradually becoming more useful services. When this happens, models need to interact with people who speak different languages and handle emoji and various other near-multimodal or unexpected forms of language. Early models (especially monolingual ones) usually had vocabularies of **30,000 to 50,000** tokens, such as the early GPT and LLaMA series.
 
-We believe multilingual vocabularies have **minimal impact** on high-resource languages (like English and Chinese). If only considering English language modeling, a smaller vocabulary works fine too. But where large vocabularies truly shine is in **handling low-resource languages** — not the tail of the data distribution, but more niche languages. A classic example is the models or tokenizers released by Cohere — they always emphasize that their large vocabulary design and tokenizer training approach enable **non-English low-resource languages to be represented with fewer tokens**, thereby dramatically reducing inference costs.
+Early models (especially monolingual ones) usually concentrated on a vocabulary of **30,000 to 50,000** tokens, but this choice was not systematically optimized and validated; it was more a result of historical inertia. GPT-2's vocabulary has 50,257 tokens, and GPT-3 uses the same order of magnitude; Llama 2's vocabulary is fixed at 32,000 tokens. This range is often called a magic number for vocabulary size: [Takase et al., 2025](https://aclanthology.org/2025.findings-acl.57/) (ACL 2025 Findings) points out that from BERT to GPT to Llama, a vocabulary size of 30k–60k has become a convention, but few papers provide a systematic justification for this choice. In other words, the vocabulary size of early monolingual models was an **empirical balance** among coverage, embedding-layer parameter count, and training efficiency that had not been rigorously optimized.
 
-### 4.3.5 Dropout and Other Regularization Methods
+Take Cohere's Command model, which emphasizes multilingual processing, as an example: its vocabulary is very large. Even GPT-4 and subsequent models using the GPT-4 tokenizer have vocabularies of around 100,000 tokens.
 
-Two important components that need to be set before the model runs: dropout and other regularization methods.
+Therefore, **a vocabulary of 100,000 to 200,000 (or even higher) has become the mainstream range for modern large language models**, and this trend is supported by two complementary lines of research. [Tao et al., 2024,](https://arxiv.org/abs/2407.13623) (NeurIPS 2024) studied the interaction between vocabulary size and scaling laws on models from 33M to 3B parameters. Their conclusion was that "**the optimal vocabulary size depends on the available compute budget, and larger models need larger vocabularies**," and that "most LLMs use vocabularies that are too small." The work predicts that the optimal vocabulary for Llama2-70B **should be at least 216K**, about 7 times its actual 32K; merely increasing the vocabulary from 32K to 43K raised ARC-Challenge accuracy from 29.1 to 32.0 under the same FLOPs (2.3e21).
 
-Pretraining appears to be the scenario least needing regularization — because **pretraining typically only runs for one training epoch**, and due to the enormous data volume, it's often impossible to even traverse all data. **Single-epoch training** makes overfitting nearly impossible. This seems to constitute sufficient reason for not needing regularization. But the actual situation is more complex. Early research heavily used dropout, and weight decay was also widely adopted. Although many teams no longer publish detailed training hyperparameters, dropout has gradually fallen out of favor, while weight decay **continues to be used**.
+Meanwhile, [Takase et al., 2025](https://aclanthology.org/2025.findings-acl.57/) systematically compared the effects of different subword vocabulary sizes on LLM performance in a controlled setting. The experimental results showed that "**larger vocabulary sizes consistently yield better LLM performance**," and that in a continual-training scenario, switching to a more appropriate larger vocabulary was also better than continuing with the pretraining vocabulary. Together, these two lines of evidence show that vocabulary expansion is not merely an engineering preference but a systemic trend driven jointly by model scale, compute budget, and downstream quality: larger models are able to exploit finer-grained subword representations, and larger vocabularies in turn make training and inference more efficient under the same compute budget.
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-29-dropoutRatio.png" width="800" alt="4-29-dropoutRatio">
+**Question: Does a multilingual vocabulary help improve performance in a single language?**
 
-Many older models used dropout during pretraining; newer models (except Qwen) rely solely on weight decay.
+The answer depends on whether the "single language" is a high-resource or low-resource language. **For high-resource languages (such as English and Chinese), the main benefit of a large multilingual vocabulary is not in language-modeling quality itself.** But this needs to be stated more precisely: what the literature repeatedly observes is not a neutral result of "little effect," but a clearly directional negative effect. [Chang et al., 2024, *When Is Multilinguality a Curse? Language Modeling for 250 High- and Low-Resource Languages*](https://aclanthology.org/2024.emnlp-main.236/) (EMNLP 2024, Outstanding Paper) pretrained tens of thousands of monolingual and multilingual models on more than 250 languages and concluded that "**high-resource languages consistently perform worse under multilingual pretraining**," and that as data scale increases, adding multilingual data harms both low-resource and high-resource language performance. This phenomenon is called the "curse of multilinguality." Therefore, if the training goal is limited to English or Chinese, a small vocabulary is sufficient; a large multilingual vocabulary brings very little incremental quality benefit to high-resource languages, and can even be negative when capacity is limited or the data mixture is inappropriate.
 
-This is actually quite paradoxical: when using SGD on massive data to train giant neural networks for a single epoch, why use weight decay?
+What truly gains systematically from a large vocabulary is **low-resource languages and languages with complex morphology and non-Latin scripts**. Standard English-centric tokenizers produce severe over-segmentation on these languages: [Petrov et al., 2023, *Language Model Tokenizers Introduce Unfairness Between Languages*](https://dl.acm.org/doi/abs/10.5555/3666122.3667730) (NeurIPS 2023) explicitly points out that "after translating the same text into different languages, tokenization length can differ by **up to 15 times**," and that this difference **persists even for deliberately trained multilingual tokenizers**. This "tokenization tax" translates directly into higher API costs, longer processing latency, and a shorter effective context window, imposing a structural extra burden on low-resource languages.
 
-The answer may be counterintuitive: weight decay is not used to control overfitting. Experiments show that different strengths of weight decay do not change the ratio between training loss and validation loss. Even with no weight decay at all, overfitting does not occur. What's truly interesting is that weight decay interacts with the optimizer's learning rate schedule in some peculiar way.
+Cohere is a typical engineering representative of this logic. According to public model descriptions, Cohere's multilingual tokenizer was measured by the company itself to produce fewer tokens on non-English text than OpenAI's tokenizer: for Japanese, for example, the gap is about **1.67×** (i.e., the Cohere tokenizer requires fewer tokens), and the gap is slightly smaller for other non-English languages but points in the same direction; fewer tokens directly reduce inference cost for non-English users and effectively extend the usable context. Cohere Labs' recently released [Tiny Aya](https://proceedings.colm.cc/paper_files/paper/2026/file/dd3c889922df2112a5b1769e3c19e28e-Paper-Conference.pdf) series (3.35B parameters, covering 70 languages) further makes the **script-aware tokenizer** a core design: its tokenizer achieves competitive or better compression on most writing systems and is **specifically optimized for underrepresented scripts**, explicitly serving the inference efficiency of low-resource languages. These engineering choices confirm a key judgment: **the priority target of a large multilingual vocabulary is not quality improvement for high-resource languages such as English or Chinese, but rather helping low-resource languages "catch up" in representation efficiency and inference economics**. In other words, if you care only about language modeling in English or Chinese, a small vocabulary is sufficient in quality; the value of a large vocabulary is that it gives languages whose "every word is chopped to pieces" under English-centric tokenizers, for the first time, token efficiency comparable to high-resource languages.
 
-Implementing weight decay is not to regularize the model (though that was the original design intent), but to obtain **lower training loss**. This effect is achieved because at the end of training, as the learning rate approaches zero, various learning dynamics produce special effects. This is a very interesting, complex, and to some degree troubling property of language models. But now you should understand why many technical reports note "we used weight decay."
+### 4.5 Dropout and Other Regularization Methods
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-30-Andriushhenko_exp.png" width="800" alt="4-30-Andriushhenko_exp">
+Two important components need to be set before running a model: dropout and other regularization methods.
 
-Now let's look at the different types of weight decay that can be implemented. When using **weight decay**, the model trains poorly at higher learning rates. When you lower the learning rate, the loss value drops rapidly. Observing cosine learning rate decay reveals that models with high weight decay progress slowly initially, but as the learning rate decreases (i.e., the cooling process), they optimize quickly. This indicates complex interactions between the optimizer and weight decay — at the end of training, **some form of implicit acceleration occurs**, ultimately producing a better model.
+Pretraining appears to be the scenario that least needs regularization—because **pretraining usually runs for only one epoch**, and due to the enormous data volume it may not even be possible to traverse all the data completely; **single-epoch training** is almost incapable of causing overfitting. This seems to constitute a sufficient reason not to need regularization. But the reality is more complicated. Early research used dropout heavily, and weight decay was also widely adopted. Although many teams no longer publish detailed training hyperparameters, dropout has gradually fallen out of favor, while weight decay **is still consistently used**.
 
-**The True Role of Weight Decay: Regularizer or Optimization Accelerator?**
+<div align="center">
+  <img src="./images/4-29-dropoutRatio.png" alt="dropoutRatio" width="800">
+  <p><em>Figure 35. dropoutRatio</em></p>
+</div>
 
-A profound counterintuitive fact: in today's large-scale language model pretraining, **Weight Decay almost no longer plays the regularization role of "preventing overfitting."** Since data scale far exceeds the model's single-pass traversal capacity, overfitting simply doesn't occur — training loss and validation loss are highly consistent.
+Many older models used dropout during pretraining, while newer frontier models have essentially set activation dropout to **0** during pretraining.
 
-However, extensive experiments (such as Andriushchenko et al.'s research) show that **appropriate weight decay can significantly reduce final training loss**. Its mechanism is tightly coupled with the optimization process: at the end of training, when cosine learning rate decays to extremely small values, weight decay interacts complexly with optimization dynamics, producing some form of "implicit acceleration" that helps the model converge to better local minima. Therefore, weight decay is essentially an **optimization intervention tool**, not a regularization tool in the traditional sense. This also explains why, even under zero overfitting risk, nearly all modern large model training still retains weight decay.
+It should be noted that after dropout's retreat, **weight decay is not the only thing** carrying the stability function: the massive data itself, gradient clipping, and the implicit regularization effect of RMSNorm/LayerNorm all play a role; but weight decay is **the most explicit and most consistently retained hyperparameter** among them, and that is precisely why its role deserves a separate discussion.
 
----
+This is actually quite counterintuitive: when training a giant neural network on massive data for a single epoch with SGD, why use weight decay?
 
-## 4.4 Model Stability
+The answer may be counterintuitive: weight decay is not used to control overfitting. Experiments show that different strengths of weight decay do not change the ratio between training loss and validation loss. Even without weight decay at all, overfitting does not occur. What is really interesting is that weight decay interacts with the optimizer's learning-rate schedule in a peculiar way.
 
-The core architecture hasn't changed much over the past year, but many releases have prominently highlighted what are called **stability techniques**. These techniques aim to train models in a more stable manner. As model scale continuously expands and training time keeps extending, such stability issues become increasingly prominent.
+Weight decay is not implemented to regularize the model (although that was the original design intent), but to obtain **lower training loss**. This is achieved because, at the end of training, as the learning rate approaches zero, various learning dynamics have a special effect. This is a very interesting, complex, and somewhat puzzling property of language models. But now you should understand why many technical reports state "we used weight decay."
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-31-OLMo2_exp.png" width="800" alt="4-31-OLMo2_exp">
+<div align="center">
+  <img src="./images/4-30-Andriushhenko_exp.png" alt="Andriushhenko_exp" width="800">
+  <p><em>Figure 36. Andriushhenko_exp</em></p>
+</div>
 
-We can see this case from the OLMo 2 paper, which provides excellent academic work on LLM training stability. They first show this chart: observe the blue curve here — the L2 norm of this gradient plot is shocking. Although the loss curve appears normal, it occasionally exhibits anomalous spikes. Opening the gradient norm plot reveals a terrifying image full of spikes, with norm values completely out of control.
+Now let us look at the different types of weight decay that can be applied. When using **weight decay**, the model does not train well at high learning rates. But when you lower the learning rate, the loss drops rapidly. Looking at cosine learning-rate decay, we can see that models with high weight decay make slow initial progress, but as the learning rate decreases (i.e., the cooling process), they optimize rapidly. This shows that there is a complex interaction between the optimizer and weight decay, and that **some kind of implicit acceleration occurs at the end of training**, ultimately yielding a better model.
 
-Training a model this way makes it very difficult to achieve reasonable convergence — ultimately, gradient norm explosion causes training to completely break down. Therefore, the current focus is how to transform the **blue curve** into something resembling the **orange curve**. Although the orange curve's loss value is higher (possibly due to dataset switching), its gradient norm consistently stays at the desired low level — this is the picture we want to see. So which parts of the Transformer are prone to causing stability issues? Actually, any part can be problematic, but based on existing technical interventions, one component truly stands out as the "problem child" — the **softmax function**. The root of the problem: exponential operations can cause numerical anomalies, and division operations can produce division-by-zero errors. For multiple reasons, softmax is indeed prone to various issues. It should be added: Transformers contain two softmax modules: **one is the output layer softmax, and the other is the softmax within the self-attention mechanism.**
+**The true role of weight decay: regularizer or optimization accelerator?**
 
-Of the two softmax modules in Transformers:
-- **Self-attention softmax**: when computing attention weights, logits ($QK^T$) may become too large, causing gradient vanishing
-- **Output layer softmax**: when generating distributions, logits may explode, making cross-entropy loss unstable
+A profound and counterintuitive fact is that in today's large-scale language model pretraining, **weight decay no longer plays the regularization role of "preventing overfitting."** Because the data scale far exceeds what the model can traverse in a single epoch, overfitting simply does not occur, and training loss and validation loss are highly consistent.
 
-### 4.4.1 z-Loss Technique — Solving Output Layer Softmax
+Traditionally, weight decay has usually been regarded as a regularization method for limiting model parameter scale and alleviating overfitting. However, D'Angelo, Andriushchenko, et al. (2024), in the paper [*Why Do We Need Weight Decay in Modern Deep Learning?*](https://arxiv.org/abs/2310.04415), point out that in modern large language model training, the role of weight decay may be more about the optimization process itself than about overfitting control in the traditional sense. Through experiments on GPT-2 models, the authors found that even when there is almost no obvious generalization gap between training data and the model, appropriate weight decay can still reduce the final training loss. The key mechanism is that weight decay, by controlling the norm of model parameters, indirectly changes the effective learning rate in the optimization process, thereby affecting the bias-variance trade-off in stochastic optimization. In the early stage of training, a higher effective learning rate can accelerate the elimination of optimization bias, but may also amplify the variance caused by gradient noise; as training proceeds and the learning rate gradually decays, the effect of variance weakens, and the optimization advantage accumulated earlier can translate into a lower final training loss.
 
-z-loss is a softmax normalizer regularization technique, formally proposed and named by Google in the PaLM model, though the idea can be traced back to earlier machine translation research. Its core goal is to prevent the **softmax denominator (normalization factor Z) from becoming too large or too small**, thereby stabilizing the training process.
+Therefore, in modern large-model training, weight decay should not be understood merely as a regularization tool for preventing overfitting; it is also an important hyperparameter that can change optimization dynamics and affect final training results.
+
+## 5 Model Stability
+
+The core architecture has not changed much over the past year, but many releases have highlighted what are called **stability tricks**. These techniques aim to train models in a more stable way. As model scale continues to grow and training time continues to lengthen, such stability problems become increasingly prominent.
+
+<div align="center">
+  <img src="./images/4-31-OLMo2_exp.png" alt="OLMo2_exp" width="800">
+  <p><em>Figure 37. OLMo2_exp</em></p>
+</div>
+
+We can see this case in the OLMo 2 paper, which provides excellent academic results on LLM training stability. They first show this figure: observe the blue curve here—the L2 norm of this gradient plot is striking. Although the loss curve looks normal, abnormal spikes appear from time to time. Opening the gradient-norm plot reveals a horrifying image full of spikes, with norm values completely out of control.
+
+Training a model this way would make reasonable convergence very difficult—eventually the gradient norm explodes and training is completely interrupted. The current focus is therefore on turning the **blue curve** into something like the **orange curve**. Although the orange curve has a higher loss value (possibly due to a dataset switch), its gradient norm always stays at an ideally low level, which is the kind of plot we want to see. So which parts of the Transformer are prone to stability problems? In fact, anything can go wrong, but judging from existing technical interventions, one component is truly a "problem child": **the softmax function**. The root cause is that exponentiation can produce numerical anomalies, and division can produce division-by-zero errors. For various reasons, softmax is indeed prone to causing all kinds of problems. It should be added that there are two softmax modules in the Transformer: **one is the softmax of the final output layer, and the other is the softmax in the self-attention mechanism.**
+
+Among the Transformer's two softmax modules:
+Self-attention softmax: when computing attention weights, the logits ($QK^T$) may be too large, causing vanishing gradients.
+Output-layer softmax: when generating a distribution, the logits may explode, making the cross-entropy loss unstable.
+
+### 5.1 z-Loss: fixing the output-layer softmax
+
+z-loss is a softmax-normalizer regularization technique, formally proposed and named by Google in the PaLM model, though the idea can be traced back to earlier machine translation research. Its core goal is to prevent **the softmax denominator (normalization factor Z) from becoming too large or too small**, thereby stabilizing training.
 
 $$
 \mathcal{L}_{\text{z-loss}} = \lambda \cdot \log^2 Z
@@ -612,9 +1227,9 @@ where:
 
 **$Z$**: the softmax normalization factor (partition function), $Z = \sum_{i=1}^{V} \exp(z_i)$
 
-**$\lambda$**: weight coefficient (PaLM uses **$10^{-4}$**)
+**$\lambda$**: the weight coefficient (PaLM uses **$10^{-4}$**)
 
-**$z_i$**: logits (unnormalized prediction scores)
+**$z_i$**: the logits (unnormalized prediction scores)
 
 **Total loss function**:
 
@@ -622,62 +1237,109 @@ $$
 \mathcal{L}_{\text{total}} = \mathcal{L}_{\text{cross-entropy}} + \lambda \cdot \log^2 Z
 $$
 
-Its purpose is to keep the **softmax normalizer** within a good range. When z(x) is close to 1 (or log z is close to 0), the softmax can be considered in a good state. In a sense, PaLM was truly the pioneer. They were the first to use the z-loss trick, while many other models didn't adopt it for a long time — at least models with publicly available papers. However, a series of follow-up studies later emerged; as far as I know, the earliest follower was Baichuan 2, followed by DCLM, OLMo 2, and other models also adopting z-loss. This is a very elegant and practical **stability improvement solution**.
+Its purpose is to keep the **softmax normalizer** in a good range. When $Z$ is close to 1 (i.e., $\log Z$ is close to 0), the softmax can be considered to be in a good state. In a sense, PaLM was indeed the pioneer. They were the first to use the z-loss trick, while many other models did not adopt it for a long time—at least among models with public papers.
 
-### 4.4.2 Solving Attention Layer Softmax Stability
+Many followers came later. Baichuan 2 was one of the earlier open-source models to publicly use z-loss, but it used max-z loss: letting $z=\max_i z_i$, the regularization term constrains $\lambda \cdot \mathbb{E}[z^2]$, rather than PaLM's normalization-factor z-loss of the form $\lambda \cdot \log^2 Z$, where $Z=\sum_i \exp(z_i)$. OLMo 2 explicitly follows the PaLM-style z-loss with weight $\lambda=10^{-5}$. The two have similar goals—both suppress the magnitude of the output-layer logits—but the specific form of the regularization term differs. This is a very elegant and practical **stability-improvement scheme**.
+
+### 5.2 Fixing the attention-layer softmax
 
 $\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{Q K^T}{\sqrt{d_k}}\right)V$
 
-Standard flow:
+Standard procedure:
 
 $Q = W_q(x)$
 
 $K = W_k(x)$
 
+$logits = QK^T / \sqrt(d_k) $
+
+A common practical form of this idea is QK normalization: normalize the queries and keys after their projections and before the dot product:
+
+$Q = \text{Norm}(W_q(x))$
+
+$K = \text{Norm}(W_k(x))$
+
 $logits = QK^T / \sqrt{d_k}$
 
-First pass query and key vectors through a LayerNorm layer:
+It controls not the softmax normalization factor Z but the numerical range of the logits fed into softmax, suppressing extreme values at the source. There is a detail that is easy to confuse here: Dehghani et al.'s original intervention in ViT-22B was precisely **to apply LayerNorm to the Q and K projections (QK-Norm)** and then compute the dot product, rather than adding LayerNorm after the attention scores. Later models such as OLMo 2 and Gemma 3 engineered this idea into applying RMSNorm to the Q/K projections themselves. Both point in the same direction: suppress the numerical range of the logits before softmax.
 
-$Q = \text{LayerNorm}(W_q(x))$
+Among **stability interventions**, the most surprising is **the remarkable effectiveness of layer normalization**. We have witnessed layer normalization evolve from appearing only at the front of a module to covering both ends of non-residual components, and now to extending into the Q and K components. At least for improving **stability**, layer normalization has shown remarkable effects with almost no impact on performance.
 
-$K = \text{LayerNorm}(W_k(x))$
+LayerNorm is applied during training. **LayerNorm is also retained at inference time.** Because LayerNorm has learned parameters, its full role is to normalize the activations and then scale them by a specific scale. Removing this step would change the model dramatically, and the model would be unable to handle unnormalized activations.
 
-$logits = QK^T / \sqrt{d_k}$
+### 5.3 A third method: soft-clipping the logits fed into softmax
 
-Before performing the **softmax** dot-product operation, first pass the **query and key vectors through a LayerNorm layer**. This is another approach to controlling softmax behavior — not controlling the normalization factor z, but controlling the numerical range of softmax inputs to naturally suppress undesirable behavior. As I mentioned earlier, this was initially an innovation in the vision and multimodal model domain: Dehghani et al.'s 2023 paper on training very large vision transformers first proposed it; subsequently, HuggingFace's Chameleon and Idefics adopted this trick in multimodal training components; now Gemma 2, DCLM, OLMo 2, and other models also use this technique to stabilize training.
+Soft-clipping, also known as logit-capping or tanh-scaling, is an emerging softmax stabilization strategy. Its core idea is: after the inner-product operation and before softmax, use the tanh function to dynamically clamp extreme logit values back so that they remain bounded.
 
-Among **stability interventions**, the most surprising is the **astonishing effectiveness of LayerNorm**. We've witnessed LayerNorm evolve from only appearing at the front of modules, to covering both ends of non-residual components, and now extending into the Q and K components. At least in terms of improving **stability**, LayerNorm demonstrates remarkable effectiveness with almost no performance impact.
-
-LayerNorm is applied during training. **During inference, LayerNorm is still retained**. Because LayerNorm has already learned parameters — its complete function is to normalize activations, then scale them by a specific factor. If this step were removed, it would cause a massive change to the model; the model would be unable to process those unnormalized activations.
-
-### 4.4.3 Method 3: Soft Clipping of Logits Input to Softmax
-
-Soft-clipping, also known as logit-capping or tanh-scaling, is an emerging softmax stabilization strategy. Its core idea: after the dot-product operation and before softmax, dynamically compress the extreme values of logits through the tanh function, keeping them bounded.
-
-**Standard Scaled Dot-Product**
+**Standard scaled dot product**
 
 $$logits = Q \cdot K^T / \sqrt{d_k}$$
 
-**Possible range: $(-\infty, +\infty)$**
+**Possible range: (-∞, +∞)**
 
-**Soft Clipping (adopted by Gemma 2/OLMo 2)**
+**Soft clipping (as represented by Gemma 2)**
 
-cap = 30.0   (soft clipping threshold)
+Gemma 2's approach is more granular: the attention layers and the output layer do not use the same threshold. The attention-layer cap is 50, and the final output-layer cap is 30.
 
-$$logitsClipped = cap \cdot \tanh(logits / cap)$$
+$$logitsClipped = cap \cdot tanh(logits / cap)$$
 
-**Range: $(-cap, +cap)$**
+**Range: (-cap, +cap)**
 
-After completing the dot-product operation in the self-attention mechanism, pass it through the soft-clipped softmax function. Specifically, use the formula above: taking logits as input, **divide by the soft clipping value inside, multiply by the soft clipping value outside**.
+After completing the inner-product operation of the self-attention mechanism, the result is passed through a soft-clipping softmax function. Specifically, the formula above is used: taking the logits as input, **divide by the soft-clipping value inside first, then multiply by the soft-clipping value outside**.
 
-When your logits substantially exceed the soft clipping value, the tanh function clips them to 1. This way, you obtain the upper bound of the soft clipping value here. In some sense, this method achieves soft clipping of logits. Both Gemma 2 and OLMo 2 adopt this technique, though it hasn't become particularly popular yet.
+When your logits greatly exceed the soft-clipping value, the tanh function clips them to 1, giving you the upper bound of the soft-clipping value. In a sense, this method achieves soft clipping of the logits. However, it is not accurate to list Gemma 2 and OLMo 2 together as users of soft clipping. Gemma 2 is indeed the most representative model for soft clipping; OLMo 2's main stability approach is QK-norm plus z-loss and does not treat soft-capping as a core technique. Soft clipping has so far not been as widely adopted as QK-norm.
 
-Counter-evidence against this method comes from the previously mentioned NVIDIA team, who tried various stability-improving interventions. The study found: **the baseline model's perplexity is 11.19; using soft clipping actually makes it worse**, while QK normalization improves performance because it allows more aggressive learning rates, letting the optimizer play a greater role.
+Experiments by the NVIDIA team actually give a more detailed picture. The bf16 baseline model's perplexity is 11.19; with QK normalization alone, perplexity drops to 10.84; the combination of QK normalization and softmax capping (QK_norm_cap) reaches 11.00; and soft capping alone gives 11.24, slightly worse than the baseline. On stability, the baseline diverges already at 8e-3, QK normalization stays stable up to 40e-3 (diverging at 60e-3), while QK_norm_cap remains stable up to 60e-3—a 1.5× increase in the usable learning rate relative to QK normalization. So the more accurate statement is not "soft clipping makes results worse," but rather: the QK-normalization route is cleaner in perplexity, and soft clipping used alone may require accepting some accuracy cost; the two combined preserve stability while buying a higher usable learning rate.
 
-## 4.5 Summary
+## 6 Summary and Review Questions
 
-LLM architectures are constantly evolving. Many of the hyperparameters we set are based on empirical evidence or extensive experimental validation proving their utility. Drawing on the latest research findings and predecessors' experience, we can quickly retrofit a model — as simple as building with blocks.
+### 6.1 Summary
 
-<img src="https://raw.githubusercontent.com/datawhalechina/diy-llm/main/docs/zh/chapter4/images/4-5-models.png" width="800" alt="4-5-models">
+The architecture of large models changes all the time, and many of the hyperparameters we set are based on experience or on extensive experiments demonstrating that they are indeed useful. Drawing on the latest research results and the experience of predecessors, we can quickly adapt a model, as simply as assembling building blocks.
+
+<div align="center">
+  <img src="./images/4-5-models.png" alt="models" width="800">
+  <p><em>Figure 38. Comparison of various model architectures (same as Figure 5)</em></p>
+</div>
 
 Many aspects of the Transformer (architecture, hyperparameters) are similar across large language models.
+
+### 6.2 Review Questions
+
+1. Question: Why is positional encoding needed?
+
+2. Question: Why use multiple heads instead of a single head?
+
+3. Question: Why divide by $\sqrt{d_k}$?
+
+4. Question: Are gated units effective?
+
+5. Question: Does a multilingual vocabulary help improve single-language performance?
+
+## References
+
+- [Attention Is All You Need — Vaswani et al., 2017](https://arxiv.org/abs/1706.03762)
+- [Are Sixteen Heads Really Better than One? — Voita et al., 2019](https://aclanthology.org/P19-1580/)
+- [What Does BERT Look At? An Analysis of BERT's Attention — Clark et al., 2019](https://aclanthology.org/W19-4808/)
+- [Layer Normalization — Ba, Kiros & Hinton, 2016](https://arxiv.org/abs/1607.06450)
+- [Deep Residual Learning for Image Recognition — He et al., 2016](https://openaccess.thecvf.com/content_cvpr_2016/html/He_Deep_Residual_Learning_CVPR_2016_paper.html)
+- [Approximation by Superpositions of a Sigmoidal Function — Cybenko, 1989](https://doi.org/10.1007/BF02551274)
+- [Approximation Capabilities of Multilayer Feedforward Networks — Hornik, 1991](https://doi.org/10.1016/0893-6080(91)90009-T)
+- [On Layer Normalization in the Transformer Architecture — Xiong et al., 2020](https://proceedings.mlr.press/v119/xiong20b.html)
+- [The Curse of Depth in Large Language Models — 2025](https://arxiv.org/abs/2502.05795)
+- [On Layer Normalizations and Residual Connections in Transformers (B2T Connection) — Takase et al., 2022](https://arxiv.org/abs/2206.00330)
+- [Transformers without Tears: Improving the Normalization of Self-Attention — Nguyen & Salazar, 2019](https://aclanthology.org/2019.iwslt-1.17/)
+- [Understanding the Difficulty of Training Transformers — Liu et al., 2020](https://aclanthology.org/2020.emnlp-main.463/)
+- [Transformers Get Stable: An End-to-End Signal Propagation Theory for Language Models — Kedia et al., 2024](https://proceedings.mlr.press/v235/kedia24a.html)
+- [Peri-LN: Revisiting Normalization Layer in the Transformer Architecture — Kim et al., 2025](https://proceedings.mlr.press/v267/kim25u.html)
+- [GLU Variants Improve Transformer — Shazeer, 2020](https://arxiv.org/abs/2002.05202)
+- [Do Transformer Modifications Transfer Across Implementations and Applications? — Narang et al., 2021](https://arxiv.org/abs/2102.11972)
+- [Scaling Laws for Neural Language Models — Kaplan et al., 2020](https://arxiv.org/abs/2001.08361)
+- [Low-Rank Bottleneck in Multi-head Attention Models — Bhojanapalli et al., 2020](https://proceedings.mlr.press/v119/bhojanapalli20a.html)
+- [Scale Efficiently: Insights from Pre-training and Fine-tuning Transformers — Tay et al., 2021](https://arxiv.org/abs/2109.10686)
+- [Large Vocabulary Size Improves Large Language Models — Takase et al., 2025](https://aclanthology.org/2025.findings-acl.57/)
+- [Scaling Laws with Vocabulary: Larger Models Deserve Larger Vocabularies — Tao et al., 2024](https://arxiv.org/abs/2407.13623)
+- [When Is Multilinguality a Curse? Language Modeling for 250 High- and Low-Resource Languages — Chang et al., 2024](https://aclanthology.org/2024.emnlp-main.236/)
+- [Language Model Tokenizers Introduce Unfairness Between Languages — Petrov et al., 2023](https://dl.acm.org/doi/abs/10.5555/3666122.3667730)
+- [Tiny Aya: Bridging Scale and Multilingual Depth — Cohere Labs](https://proceedings.colm.cc/paper_files/paper/2026/file/dd3c889922df2112a5b1769e3c19e28e-Paper-Conference.pdf)
+- [Why Do We Need Weight Decay in Modern Deep Learning? — D'Angelo et al., 2024](https://arxiv.org/abs/2310.04415)
