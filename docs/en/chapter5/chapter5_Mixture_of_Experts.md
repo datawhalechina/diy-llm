@@ -232,7 +232,7 @@ class TC_MoE(nn.Module):
         # out: weighted-aggregated vector representation of each token over Top-K experts
         return out
 ```
-**The above demonstrates the key components of Top-K TC MoE. Runnable code at [Top-K TC](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter5/Top-K%20TC.py).**
+**The above demonstrates the key components of Top-K TC MoE. Runnable code at [Top-K TC](https://github.com/datawhalechina/diy-llm/blob/main/docs/en/chapter5/Top-K%20TC.py).**
 
 TC_MoE(dim=32, num_experts=10, k=2), input text:
 >"MoE是很强大的机制！", "专家混合模型非常高效。"
@@ -331,7 +331,7 @@ class EC_MoE(nn.Module):
             out += expert_out * dispatch_weights[:, e_id].unsqueeze(1)
         return out
 ```
-**The above demonstrates the key components of Top-K EC MoE. Runnable code at [Top-K EC](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter5/Top-K%20EC.py).**
+**The above demonstrates the key components of Top-K EC MoE. Runnable code at [Top-K EC](https://github.com/datawhalechina/diy-llm/blob/main/docs/en/chapter5/Top-K%20EC.py).**
 
 EC_MoE(dim=32, num_experts=10, k=2), input text:
 >"MoE是很强大的机制！", "专家混合模型非常高效。"
@@ -348,7 +348,7 @@ The routing mechanism's selection basis is the input hidden state. Specifically,
 
 **TC vs EC**:
 
-Running both code examples [Top-K EC](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter5/Top-K%20EC.py) and [Top-K TC](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter5/Top-K%20TC.py) allows intuitive comparison of the two routing strategies.
+Running both code examples [Top-K EC](https://github.com/datawhalechina/diy-llm/blob/main/docs/en/chapter5/Top-K%20EC.py) and [Top-K TC](https://github.com/datawhalechina/diy-llm/blob/main/docs/en/chapter5/Top-K%20TC.py) allows intuitive comparison of the two routing strategies.
 
 1. **In TC mode**, each token actively selects its most suitable Top-K experts, like "student finds advisor." Advantage: every token gets at least attempted assignment, so semantic completeness is high, reducing information loss risk. Disadvantage: expert **load imbalance** — a few "popular" experts handle the vast majority of tokens, receive full training and significantly outperform others, while many "cold" experts stay idle long-term with stagnating capability. **This gap causes the model to become "skewed" — performing well in high-frequency domains but poorly in low-frequency ones.**
 2. **In EC mode**, each expert actively selects its most desired Top-K tokens from all tokens, like "advisor picks students." This mechanism naturally constrains each expert's processing volume (enrollment quota), significantly alleviating or eliminating expert load imbalance, benefiting balanced expert capability improvement. But the cost: some tokens may be completely unselected by any expert (dropped), causing semantic information loss or context segment skipping, **thereby increasing the risk of misinterpretation or errors during model understanding and reasoning, ultimately degrading LLM final performance.**
@@ -962,7 +962,7 @@ class MiniMoELLModel(nn.Module):
 >
 >Applying Layer Normalization before entering the final prediction head (lm_head) is a standard step whose core purpose is to stabilize and normalize the model's output hidden representation $x$. It performs independent per-sample normalization on each token embedding's d_model-dimensional features, ensuring that features $x$ input to the final linear projection layer have approximately consistent scale and distribution. This normalization effect not only significantly stabilizes the model training process — allowing higher learning rates and thus faster convergence — but also helps lm_head more accurately map uniformly-scaled features back to the vocabulary (logits), ultimately improving LLM prediction accuracy.
 
-**The above demonstrates key module code for MoE in Mini LLM applications. Complete runnable code at [Mini LLM+MoE](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/chapter5/Mini%20LLM%2BMoE.py)**
+**The above demonstrates key module code for MoE in Mini LLM applications. Complete runnable code at [Mini LLM+MoE](https://github.com/datawhalechina/diy-llm/blob/main/docs/en/chapter5/Mini%20LLM%2BMoE.py)**
 
 ---
 

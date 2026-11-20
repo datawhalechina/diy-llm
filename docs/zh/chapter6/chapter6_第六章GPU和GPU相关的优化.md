@@ -906,5 +906,5 @@ PagedAttention 将显存管理从**以请求为单位的静态圈地转变为以
 - [NVIDIA Ampere 架构详解](https://developer.nvidia.com/blog/nvidia-ampere-architecture-in-depth/)
 - [NVIDIA Ampere GPU 架构应用优化](https://developer.download.nvidia.cn/video/gputechconf/gtc/2020/presentations/s21819-optimizing-applications-for-nvidia-ampere-gpu-architecture.pdf?ref=blog.paperspace.com#3#1)
 - [NVIDIA GPU 每线程寄存器限制讨论](https://forums.developer.nvidia.com/t/whats-the-max-register-number-that-causes-slowdown/234969#main-container)
-- [FlashAttention.ipynb](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/zh/chapter6/Flashattention.ipynb)
+- [FlashAttention.ipynb](https://github.com/datawhalechina/diy-llm/blob/main/docs/zh/chapter6/Flashattention.ipynb)
 - [Ascend NPU 大语言模型部署教程](https://github.com/datawhalechina/self-llm/blob/master/support_model_Ascend.md)

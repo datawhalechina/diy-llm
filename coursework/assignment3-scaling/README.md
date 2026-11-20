@@ -18,7 +18,7 @@
 ├── train.py              # 训练脚本
 ├── scaling.py            # 缩放定律相关函数
 ├── fit_scaling.py        # 缩放定律拟合
-├── predict loss.py       # 损失预测
+├── predict_loss.py       # 损失预测
 ├── test1.py              # IsoFLOPs曲线分析
 ├── data.bin              # 训练数据（需要通过Assignment1中的`get train data.py`得到）
 ├── tokenizer.json        # 分词器配置
@@ -107,7 +107,7 @@ python train.py --d_model 768 --num_layers 36 --num_heads 12
 python fit_scaling.py
 
 # 预测特定配置的损失（通过模型的非嵌入参数、训练总token数量）
-python "predict loss.py"
+python predict_loss.py
 ```
 
 ## 实验配置

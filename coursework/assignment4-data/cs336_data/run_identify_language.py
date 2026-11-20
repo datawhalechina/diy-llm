@@ -1,8 +1,12 @@
-import fasttext
+import os
 from functools import lru_cache
+from pathlib import Path
+
+import fasttext
 
 # fastText 语言识别模型路径
-MODEL_PATH = "/mnt/d/code/项目/cs336/CS336-Chinese-co-construction/coursework/Assignment4_Data/cs336_data/lid.176.bin"
+# 默认读取与本文件同目录的 lid.176.bin；也可用环境变量 FASTTEXT_LID_MODEL 指定
+MODEL_PATH = os.environ.get("FASTTEXT_LID_MODEL", str(Path(__file__).with_name("lid.176.bin")))
 
 
 @lru_cache(maxsize=1)

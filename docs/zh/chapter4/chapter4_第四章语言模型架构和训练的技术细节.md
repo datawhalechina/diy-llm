@@ -237,7 +237,7 @@ $$
 残差（Residual） 在深度学习中特指**残差连接**（Residual Connection），也称为**跳跃连接**（Skip Connection），是连接神经网络层与层之间的"捷径"，让信息可以直接绕过某些层传递。
 
 <div align="center">
-  <img src="./images/4-3-Add&amp;Norm.png" alt="Add&amp;Norm" width="800">
+  <img src="./images/4-3-Add&Norm.png" alt="Add&amp;Norm" width="800">
   <p><em>图 3. Add&amp;Norm</em></p>
 </div>
 
@@ -351,7 +351,7 @@ ReLU的**计算高效**，相比Sigmoid/Tanh，ReLU的导数计算简单（0或1
 ### 3.1 归一化
 
 <div align="center">
-  <img src="./images/4-6-Per&amp;PostNorm.png" alt="Per&amp;PostNorm" width="800">
+  <img src="./images/4-6-Per&PostNorm.png" alt="Per&amp;PostNorm" width="800">
   <p><em>图 6. Per&amp;PostNorm</em></p>
 </div>
 
@@ -378,7 +378,7 @@ Pre-LN 将 LayerNorm 放置在子层之前，使残差连接保留一条不经�
 需要注意的是，**Pre-LN 更稳定并不意味着 Post-LN 在所有情况下都更差**，两者在不同网络深度下各有优势。然而，Pre-LN 本身也存在局限性。近期研究 [The Curse of Depth in Large Language Models（2025）](https://arxiv.org/abs/2502.05795) 发现，随着网络深度增加，Pre-LN 残差流中的激活方差可能持续增长，导致深层模块的特征学习能力下降。这表明 Pre-LN 虽然改善了梯度传播问题，但并未完全解决深层 Transformer 的训练稳定性问题，也推动了 LayerNorm Scaling 等改进方法的发展。
 
 <div align="center">
-  <img src="./images/4-7-post&amp;perNormData.png" alt="post&amp;perNormData" width="800">
+  <img src="./images/4-7-post&perNormData.png" alt="post&amp;perNormData" width="800">
   <p><em>图 7. post&amp;perNormData</em></p>
 </div>
 
@@ -491,7 +491,7 @@ FFN去除偏置项b的理由几乎和RMSNorm一致，去除偏置项的想法广
 从transformer或者深度学习这个概念被发明起，大家都热衷于改进其中的激活函数，有一大堆激活函数；ReLU、GeLU、Swish、ELU、GeGLU。有不同类型的MLP；GeGLU、ReGLU、SeLU、SwiGLU和LiGLU。这些是什么？人们使用它干什么，这又有多重要？
 
 <div align="center">
-  <img src="./images/4-9-ReLU&amp;GeLU.png" alt="ReLU&amp;GeLU" width="800">
+  <img src="./images/4-9-ReLU&GeLU.png" alt="ReLU&amp;GeLU" width="800">
   <p><em>图 12. ReLU&amp;GeLU</em></p>
 </div>
 
@@ -867,7 +867,7 @@ MQA/GQA 的核心贡献在于：通过让多个查询头共享同一组 Key/Valu
 **稀疏 / 滑动窗口注意力**
 
 <div align="center">
-  <img src="./images/4-16-sparse&amp;structuredAttention.png" alt="sparse&amp;structuredAttention" width="800">
+  <img src="./images/4-16-sparse&structuredAttention.png" alt="sparse&amp;structuredAttention" width="800">
   <p><em>图 19. sparse&amp;structuredAttention</em></p>
 </div>
 
@@ -1073,7 +1073,7 @@ $$
 观察现有模型会发现，许多都遵循这个经验法则，**(8/3)约等于2.66**.
 
 <div align="center">
-  <img src="./images/4-23-d_ff&amp;d_model.png" alt="d_ff&amp;d_model" width="800">
+  <img src="./images/4-23-d_ff&d_model.png" alt="d_ff&amp;d_model" width="800">
   <p><em>图 29. d_ff&amp;d_model</em></p>
 </div>
 
@@ -1115,7 +1115,7 @@ Bhojanapalli等人2020年的研究[Low-Rank Bottleneck in Multi-head Attention M
 我们的模型应该是要**深度还是宽度**？要多深和多宽？
 
 <div align="center">
-  <img src="./images/4-27-wide&amp;deep.png" alt="wide&amp;deep" width="800">
+  <img src="./images/4-27-wide&deep.png" alt="wide&amp;deep" width="800">
   <p><em>图 33. wide&amp;deep</em></p>
 </div>
 
@@ -1126,7 +1126,7 @@ Bhojanapalli等人2020年的研究[Low-Rank Bottleneck in Multi-head Attention M
 抛开这些限制，我们可以抽象思考：宽深比对模型性能有何影响？Kaplan等人再次提供了很好的可视化展示。这是三个不同规模的数据；5000万、2.74亿和15亿参数。横轴是宽深比，纵轴是损失差异的百分比变化。可以看到三条曲线的最小值都落在**几十到一百左右的区间**（约 30–100），在这个区间内不同规模的模型损失都接近最低。
 
 <div align="center">
-  <img src="./images/4-28-wide&amp;deep_exp.png" alt="wide&amp;deep_exp" width="800">
+  <img src="./images/4-28-wide&deep_exp.png" alt="wide&amp;deep_exp" width="800">
   <p><em>图 34. wide&amp;deep_exp</em></p>
 </div>
 

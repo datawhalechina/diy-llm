@@ -677,7 +677,7 @@ Standard Transformer Attention has $O(N^2)$ compute and memory complexity for se
 
 FlashAttention does not change Attention's asymptotic computational complexity (FLOPs remain $O(N^2)$), but uses a **tiling** strategy to complete tiled $QK^T$, online softmax, and $V$ accumulation entirely in on-chip SRAM, thereby **avoiding explicitly materializing the complete Attention matrix in HBM**. This method significantly reduces HBM access count and improves data reuse, thereby increasing computational density. In practice, it often transforms Attention computation from bandwidth-bound to near compute-bound, yielding significant performance gains on real GPUs.
 
->FlashAttention is mathematically equivalent to standard attention (except for floating-point error) — it's exact rearrangement, not approximate computation. **Try running [FlashAttention.ipynb](https://github.com/1iyouzhen/CS336-Chinese-co-construction/blob/main/docs/zh/chapter6/Flashattention.ipynb) to compare FlashAttention and standard Attention computation results.**
+>FlashAttention is mathematically equivalent to standard attention (except for floating-point error) — it's exact rearrangement, not approximate computation. **Try running [FlashAttention.ipynb](https://github.com/datawhalechina/diy-llm/blob/main/docs/en/chapter6/Flashattention.ipynb) to compare FlashAttention and standard Attention computation results.**
 
 <div align="center">
 <img width="1080" height="370" alt="FlashAttention benchmarks" src="https://github.com/user-attachments/assets/bf311647-581d-4608-b357-1dd43d4d62d3" />

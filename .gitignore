@@ -33,3 +33,8 @@ docs/.vitepress/dist/
 
 Diy-LLM-课程讲义.pdf
 diy-llm-V0.2-2026-08-17.pdf
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
