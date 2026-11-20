@@ -1,5 +1,7 @@
 # CS336 2025年春季学期作业2：系统
 
+> 常见问题与排错请参阅[作业 FAQ](../FAQ.md)。
+
 有关作业的完整描述，请参见作业文档
 [cs336_spring2025_assignment2_systems.pdf](./相关文档/cs336_spring2025_assignment2_systems.pdf)
 

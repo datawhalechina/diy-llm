@@ -1,5 +1,7 @@
 # CS336 Spring 2025 Assignment 5: Alignment
 
+> 常见问题与排错请参阅[作业 FAQ](../FAQ.md)。
+
 本目录是 **CS336 作业 5：Alignment（对齐与推理强化学习）** 的复现教程，包含：
 
 - **官方英文讲义**：`cs336_spring2025_assignment5_alignment.pdf`
