@@ -183,13 +183,12 @@ CS336-Chinese-co-construction/
 <div align="center">
   <table>
     <tr>
-      <td align="center"><img src="/读者交流群1.png" alt="读者交流群1二维码" width="280"><br>读者交流群1</td>
-      <td align="center"><img src="/读者交流群2.png" alt="读者交流群2二维码" width="280"><br>读者交流群2</td>
+      <td align="center"><img src="/读者交流群3.png" alt="读者交流群3二维码" width="280"><br>读者交流群3</td>
     </tr>
   </table>
 </div>
 
-群1满员后可加入群2。如果两个群二维码都过期或已满，可以添加以下任一负责人的微信（备注「diy-llm」），由我们拉你入群：
+如果群二维码过期或已满，可以添加以下任一负责人的微信（备注「diy-llm」），由我们拉你入群：
 
 | 负责人 | 微信号 |
 |--------|--------|

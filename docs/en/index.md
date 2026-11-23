@@ -144,27 +144,6 @@ Theory can be studied normally. Some assignments can be debugged on CPU, but ful
 We retain the original technical depth while adding Chinese explanations, detailed reference sources, domestic model examples (Qwen, DeepSeek), and complete assignment implementations. See "What We Changed from the Original" for a point-by-point comparison and "Version Alignment" for how the two CS336 offerings map to this project.
 </details>
 
-## Reader Community
-
-Join the Diy-LLM reader community to discuss the course, ask questions, and learn together:
-
-<div align="center">
-  <table>
-    <tr>
-      <td align="center"><img src="/读者交流群1.png" alt="Reader community group 1 QR code" width="280"><br>Group 1</td>
-      <td align="center"><img src="/读者交流群2.png" alt="Reader community group 2 QR code" width="280"><br>Group 2</td>
-    </tr>
-  </table>
-</div>
-
-If group 1 is full, join group 2. If both QR codes have expired or are full, add any maintainer below on WeChat (note: diy-llm) and we'll add you to the group:
-
-| Maintainer | WeChat ID |
-|------------|-----------|
-| Hu Xu (徐虎) | `xuhu96736` |
-| Li Youzhen (黎又榛) | `zydsx111` |
-| Li Shengkang (李盛康) | `muzichengminguangli` |
-
 ## Contributors
 
 <table border="0">
